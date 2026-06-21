@@ -171,6 +171,7 @@ Recommended provisioning order:
 6. Vault secrets: `infrastructure/terraform/environments/vault`
 7. External Secrets manifests: `infrastructure/kubernetes/external-secrets`
 8. GitHub Actions OCI runners: `docs/github-actions-runners.md`
+9. Strapi CI/CD workflow: `docs/github-actions-strapi.md`
 
 Each Terraform environment includes a README and a `terraform.tfvars.example`.
 Copy the example to `terraform.tfvars`, fill in real OCI values locally, then run:

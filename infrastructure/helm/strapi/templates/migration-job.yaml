@@ -1,28 +1,28 @@
-apiVersion: apps/v1
-kind: Deployment
+{{- if .Values.migrations.enabled }}
+apiVersion: batch/v1
+kind: Job
 metadata:
-  name: {{ include "strapi.fullname" . }}
+  name: {{ include "strapi.fullname" . }}-migrate
   labels:
     {{- include "strapi.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migration
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
-  {{- if not .Values.autoscaling.enabled }}
-  replicas: {{ .Values.replicaCount }}
-  {{- end }}
-  selector:
-    matchLabels:
-      {{- include "strapi.selectorLabels" . | nindent 6 }}
+  backoffLimit: {{ .Values.migrations.backoffLimit }}
+  ttlSecondsAfterFinished: {{ .Values.migrations.ttlSecondsAfterFinished }}
   template:
     metadata:
       labels:
         {{- include "strapi.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migration
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- with .Values.podAnnotations }}
-      annotations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
     spec:
+      restartPolicy: Never
       serviceAccountName: {{ include "strapi.serviceAccountName" . }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -50,20 +50,14 @@ spec:
         {{- end }}
       {{- end }}
       containers:
-        - name: {{ include "strapi.name" . }}
+        - name: migrate
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           workingDir: {{ .Values.workingDir | quote }}
           command:
-            {{- toYaml .Values.command | nindent 12 }}
-          args:
-            {{- toYaml .Values.args | nindent 12 }}
-          ports:
-            - name: http
-              containerPort: {{ .Values.containerPort }}
-              protocol: TCP
+            {{- toYaml .Values.migrations.command | nindent 12 }}
           env:
             {{- range $name, $value := .Values.env }}
             - name: {{ $name }}
@@ -83,49 +77,6 @@ spec:
                   name: {{ $.Values.externalConfig.secretName }}
                   key: {{ $key }}
             {{- end }}
-          {{- if .Values.probes.readiness.enabled }}
-          readinessProbe:
-            {{- omit .Values.probes.readiness "enabled" | toYaml | nindent 12 }}
-          {{- end }}
-          {{- if .Values.probes.liveness.enabled }}
-          livenessProbe:
-            {{- omit .Values.probes.liveness "enabled" | toYaml | nindent 12 }}
-          {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-          {{- if or .Values.volumes.source.enabled .Values.volumes.nodeModules.enabled }}
-          volumeMounts:
-            {{- if .Values.volumes.source.enabled }}
-            - name: source
-              mountPath: {{ .Values.volumes.source.mountPath }}
-            {{- end }}
-            {{- if .Values.volumes.nodeModules.enabled }}
-            - name: node-modules
-              mountPath: {{ .Values.volumes.nodeModules.mountPath }}
-            {{- end }}
-          {{- end }}
-      {{- if or .Values.volumes.source.enabled .Values.volumes.nodeModules.enabled }}
-      volumes:
-        {{- if .Values.volumes.source.enabled }}
-        - name: source
-          hostPath:
-            path: {{ .Values.volumes.source.hostPath }}
-            type: Directory
-        {{- end }}
-        {{- if .Values.volumes.nodeModules.enabled }}
-        - name: node-modules
-          emptyDir: {}
-        {{- end }}
-      {{- end }}
-      {{- with .Values.nodeSelector }}
-      nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.affinity }}
-      affinity:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+{{- end }}

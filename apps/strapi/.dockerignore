@@ -1,0 +1,9 @@
+node_modules
+dist
+.cache
+.tmp
+.strapi
+public/uploads/*
+!public/uploads/.gitkeep
+.env
+npm-debug.log*

@@ -18,6 +18,15 @@ command:
 args:
   - npm ci && npm run develop
 
+migrations:
+  enabled: false
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 300
+  command:
+    - npm
+    - run
+    - migrate
+
 serviceAccount:
   create: true
   automount: true
@@ -84,10 +93,12 @@ secretEnv:
 initContainers:
   enabled: true
   postgres:
+    enabled: true
     image: postgres:17
     host: postgres
     port: 5432
   minio:
+    enabled: true
     image: curlimages/curl:latest
     url: http://minio:9000/minio/health/ready
 
@@ -126,4 +137,3 @@ volumes:
 nodeSelector: {}
 tolerations: []
 affinity: {}
-

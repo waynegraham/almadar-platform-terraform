@@ -1,0 +1,36 @@
+# Production-style image runtime used by GitHub Actions deployments.
+# Keep values-dev.yaml focused on local/k3d development with hostPath mounts.
+
+image:
+  repository: "<OCIR_REGISTRY>/<OCIR_NAMESPACE>/almadar-strapi"
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  nodePort: null
+
+env:
+  S3_ENDPOINT: ""
+
+initContainers:
+  minio:
+    enabled: false
+
+workingDir: /opt/app
+
+command:
+  - npm
+  - run
+  - start
+
+args: []
+
+migrations:
+  enabled: true
+
+volumes:
+  source:
+    enabled: false
+  nodeModules:
+    enabled: false
