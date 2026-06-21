@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cantaloupe.fullname" . }}
+  labels:
+    {{- include "cantaloupe.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "cantaloupe.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cantaloupe.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "cantaloupe.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.initContainers.minio.enabled }}
+      initContainers:
+        - name: wait-for-minio
+          image: "{{ .Values.initContainers.minio.image.repository }}:{{ .Values.initContainers.minio.image.tag }}"
+          imagePullPolicy: {{ .Values.initContainers.minio.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - until curl -fsS {{ .Values.initContainers.minio.url }}; do echo waiting for minio; sleep 2; done
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.containerPort }}
+              protocol: TCP
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            {{- range $name, $value := .Values.env }}
+            - name: {{ $name }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- range $name, $key := .Values.configMapEnv }}
+            - name: {{ $name }}
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ $.Values.externalConfig.configMapName }}
+                  key: {{ $key }}
+            {{- end }}
+            {{- range $name, $key := .Values.secretEnv }}
+            - name: {{ $name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.externalConfig.secretName }}
+                  key: {{ $key }}
+            {{- end }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: cantaloupe-config
+              mountPath: /etc/cantaloupe/cantaloupe.properties.tmpl
+              subPath: {{ .Values.externalConfig.cantaloupeConfigKey }}
+              readOnly: true
+            {{- if .Values.persistence.enabled }}
+            - name: cantaloupe-cache
+              mountPath: {{ .Values.persistence.mountPath }}
+            {{- end }}
+      volumes:
+        - name: cantaloupe-config
+          configMap:
+            name: {{ .Values.externalConfig.cantaloupeConfigMapName }}
+        {{- if .Values.persistence.enabled }}
+        - name: cantaloupe-cache
+          persistentVolumeClaim:
+            claimName: {{ include "cantaloupe.cacheClaimName" . }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

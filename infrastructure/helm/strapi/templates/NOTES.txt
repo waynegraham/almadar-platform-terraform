@@ -1,0 +1,5 @@
+{{ include "strapi.fullname" . }} has been installed.
+
+Service:
+  {{ include "strapi.fullname" . }}:{{ .Values.service.port }}
+

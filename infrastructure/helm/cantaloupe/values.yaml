@@ -1,0 +1,110 @@
+environment: dev
+
+replicaCount: 1
+
+image:
+  repository: uclalibrary/cantaloupe
+  pullPolicy: IfNotPresent
+  tag: "5.0.7-0"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 8182
+  targetPort: http
+  nodePort: null
+  annotations: {}
+
+containerPort: 8182
+
+externalConfig:
+  configMapName: almadar-config
+  secretName: almadar-secrets
+  cantaloupeConfigMapName: cantaloupe-config
+  cantaloupeConfigKey: cantaloupe.properties
+
+env:
+  CONFIG_FILE: /tmp/cantaloupe.properties
+  CANTALOUPE_S3SOURCE_ENDPOINT: http://minio:9000
+  CANTALOUPE_CACHE_SERVER_DERIVATIVE_ENABLED: "true"
+  CANTALOUPE_CACHE_SERVER_DERIVATIVE: FilesystemCache
+  CANTALOUPE_FILESYSTEMCACHE_PATHNAME: /var/cache/cantaloupe
+
+configMapEnv:
+  CANTALOUPE_S3SOURCE_REGION: S3_REGION
+  CANTALOUPE_S3SOURCE_ACCESS_KEY_ID: S3_ACCESS_KEY_ID
+  CANTALOUPE_S3SOURCE_BASICLOOKUPSTRATEGY_BUCKET_NAME: IIIF_BUCKET
+  CANTALOUPE_S3SOURCE_BASICLOOKUPSTRATEGY_PATH_PREFIX: CANTALOUPE_S3_PREFIX
+  CANTALOUPE_S3SOURCE_BASICLOOKUPSTRATEGY_PATH_SUFFIX: CANTALOUPE_S3_SUFFIX
+
+secretEnv:
+  CANTALOUPE_S3SOURCE_SECRET_KEY: S3_SECRET_ACCESS_KEY
+
+initContainers:
+  minio:
+    enabled: true
+    image:
+      repository: curlimages/curl
+      tag: latest
+      pullPolicy: IfNotPresent
+    url: http://minio:9000/minio/health/ready
+
+readinessProbe:
+  httpGet:
+    path: /
+    port: http
+  initialDelaySeconds: 20
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
+
+livenessProbe:
+  httpGet:
+    path: /
+    port: http
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+resources: {}
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+
+persistence:
+  enabled: true
+  existingClaim: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 2Gi
+  storageClassName: ""
+  mountPath: /var/cache/cantaloupe
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

@@ -1,0 +1,10 @@
+apiVersion: v2
+name: cantaloupe
+description: Helm chart for the Almadar Cantaloupe IIIF image server
+type: application
+version: 0.1.0
+appVersion: "5.0.7"
+keywords:
+  - almadar
+  - iiif
+  - cantaloupe

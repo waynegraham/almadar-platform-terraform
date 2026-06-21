@@ -1,0 +1,8 @@
+environment: dev
+
+service:
+  type: NodePort
+  nodePort: 31820
+
+env:
+  CANTALOUPE_S3SOURCE_ENDPOINT: http://minio:9000

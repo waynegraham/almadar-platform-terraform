@@ -1,0 +1,98 @@
+environment: dev
+
+replicaCount: 1
+
+image:
+  repository: node
+  tag: "22-alpine"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+command:
+  - sh
+  - -c
+args:
+  - npm ci && npm run dev -- --hostname 0.0.0.0 --port 3000
+
+workingDir: /workspace/apps/frontend
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 3000
+  targetPort: 3000
+  nodePort: null
+
+containerPort: 3000
+
+env:
+  NODE_ENV: development
+  NEXT_TELEMETRY_DISABLED: "1"
+  FRONTEND_PORT: "3000"
+  STRAPI_INTERNAL_URL: http://strapi:1337
+
+envFromConfigMap:
+  enabled: true
+  name: almadar-config
+  keys:
+    NEXT_PUBLIC_STRAPI_URL: NEXT_PUBLIC_STRAPI_URL
+
+probes:
+  readiness:
+    enabled: true
+    tcpSocket:
+      port: http
+    initialDelaySeconds: 20
+    periodSeconds: 10
+  liveness:
+    enabled: true
+    tcpSocket:
+      port: http
+    initialDelaySeconds: 60
+    periodSeconds: 20
+
+resources: {}
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+
+volumes:
+  source:
+    enabled: true
+    type: hostPath
+    mountPath: /workspace/apps/frontend
+    hostPath: /workspace/almadar-platform/apps/frontend
+  nodeModules:
+    enabled: true
+    mountPath: /workspace/apps/frontend/node_modules
+  nextCache:
+    enabled: true
+    mountPath: /workspace/apps/frontend/.next
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+

@@ -1,0 +1,21 @@
+environment: prod
+
+replicaCount: 2
+
+env:
+  NODE_ENV: production
+  NEXT_TELEMETRY_DISABLED: "1"
+  FRONTEND_PORT: "3000"
+  STRAPI_INTERNAL_URL: http://strapi:1337
+
+args:
+  - npm ci && npm run build && npm run start -- --hostname 0.0.0.0 --port 3000
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+

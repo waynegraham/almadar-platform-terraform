@@ -61,6 +61,8 @@ Create a local environment file:
 cp .env.example .env
 ```
 
+Review `.env` before starting services. The example file is usable for local development, but its placeholder secrets should not be used outside a developer machine.
+
 Start the full local stack:
 
 ```bash
@@ -88,6 +90,47 @@ MINIO_ROOT_PASSWORD=change-me-minio-password
 ```
 
 For real work, change secrets in `.env`. Do not commit `.env`.
+
+## Usage Notes
+
+Use Docker Compose for day-to-day application development. It is the quickest path for running the frontend, Strapi, PostgreSQL, MinIO, and Cantaloupe together with local source mounts.
+
+Use k3d when validating Kubernetes manifests or cluster behavior. The k3d environment binds the same local ports as Docker Compose, so stop Compose first:
+
+```bash
+docker compose down
+./infrastructure/k3d/bootstrap.sh
+kubectl -n dev get pods
+```
+
+Delete the k3d cluster when finished:
+
+```bash
+./infrastructure/k3d/delete.sh
+```
+
+Use Helm when validating deployable application packaging. Charts live under `infrastructure/helm/` and have separate values overlays for `dev`, `test`, and `prod`.
+
+```bash
+helm lint infrastructure/helm/frontend
+helm lint infrastructure/helm/frontend -f infrastructure/helm/frontend/values-dev.yaml
+
+helm lint infrastructure/helm/strapi
+helm lint infrastructure/helm/strapi -f infrastructure/helm/strapi/values-dev.yaml
+
+helm lint infrastructure/helm/cantaloupe
+helm lint infrastructure/helm/cantaloupe -f infrastructure/helm/cantaloupe/values-dev.yaml
+```
+
+Render a chart locally before installing it:
+
+```bash
+helm template almadar-dev-frontend infrastructure/helm/frontend \
+  -f infrastructure/helm/frontend/values-dev.yaml \
+  --namespace dev
+```
+
+The `dev` values are intended for local development. The `prod` values assume a production image or deployment pipeline provides application code and production secrets.
 
 ## Make Targets
 
@@ -127,6 +170,17 @@ npm run develop
 ```
 
 When running apps on the host, keep the Docker services running for PostgreSQL, MinIO, and Cantaloupe.
+
+If ports are already in use, either stop the conflicting service or change the relevant port in `.env` before starting Compose:
+
+```env
+FRONTEND_PORT=3000
+STRAPI_PORT=1337
+POSTGRES_PORT=5432
+MINIO_API_PORT=9000
+MINIO_CONSOLE_PORT=9001
+CANTALOUPE_PORT=8182
+```
 
 ## Object Storage
 
@@ -185,6 +239,13 @@ docker run --rm --network almadar-local --entrypoint sh minio/mc:latest \
   -c 'mc alias set local http://minio:9000 almadar change-me-minio-password >/dev/null && mc ls local'
 ```
 
+List Strapi uploads:
+
+```bash
+docker run --rm --network almadar-local --entrypoint sh minio/mc:latest \
+  -c 'mc alias set local http://minio:9000 almadar change-me-minio-password >/dev/null && mc ls --recursive local/strapi-dev'
+```
+
 ## Cantaloupe IIIF
 
 Cantaloupe is configured in `infrastructure/cantaloupe/cantaloupe.properties` and reads source images via `S3Source` from `iiif-dev`.
@@ -198,6 +259,22 @@ http://localhost:8182/iiif/2/<object-key>/0,0,512,512/256,/0/default.jpg
 ```
 
 The server supports JPEG, PNG, and TIFF source images.
+
+Upload a local image into the IIIF bucket for manual testing:
+
+```bash
+docker run --rm --network almadar-local \
+  -v "$PWD:/workspace" \
+  --entrypoint sh minio/mc:latest \
+  -c 'mc alias set local http://minio:9000 almadar change-me-minio-password >/dev/null && mc cp /workspace/path/to/image.jpg local/iiif-dev/image.jpg'
+```
+
+Then verify:
+
+```text
+http://localhost:8182/iiif/2/image.jpg/info.json
+http://localhost:8182/iiif/2/image.jpg/full/256,/0/default.jpg
+```
 
 ## Useful Commands
 

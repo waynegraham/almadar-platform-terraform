@@ -1,0 +1,12 @@
+environment: test
+
+env:
+  CANTALOUPE_S3SOURCE_ENDPOINT: http://minio:9000
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 384Mi
+  limits:
+    cpu: 500m
+    memory: 768Mi

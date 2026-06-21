@@ -1,0 +1,16 @@
+environment: test
+
+env:
+  NODE_ENV: test
+  NEXT_TELEMETRY_DISABLED: "1"
+  FRONTEND_PORT: "3000"
+  STRAPI_INTERNAL_URL: http://strapi:1337
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+

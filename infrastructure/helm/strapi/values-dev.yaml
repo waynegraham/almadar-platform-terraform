@@ -1,0 +1,8 @@
+environment: dev
+
+service:
+  type: NodePort
+  port: 1337
+  targetPort: 1337
+  nodePort: 31337
+

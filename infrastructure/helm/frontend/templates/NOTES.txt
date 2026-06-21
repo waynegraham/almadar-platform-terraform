@@ -1,0 +1,5 @@
+{{ include "frontend.fullname" . }} has been installed.
+
+Service:
+  {{ include "frontend.fullname" . }}:{{ .Values.service.port }}
+

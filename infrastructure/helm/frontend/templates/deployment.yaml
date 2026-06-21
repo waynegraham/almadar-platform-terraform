@@ -1,0 +1,114 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "frontend.fullname" . }}
+  labels:
+    {{- include "frontend.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "frontend.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "frontend.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "frontend.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ include "frontend.name" . }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          workingDir: {{ .Values.workingDir | quote }}
+          command:
+            {{- toYaml .Values.command | nindent 12 }}
+          args:
+            {{- toYaml .Values.args | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.containerPort }}
+              protocol: TCP
+          env:
+            {{- range $name, $value := .Values.env }}
+            - name: {{ $name }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- if .Values.envFromConfigMap.enabled }}
+            {{- range $name, $key := .Values.envFromConfigMap.keys }}
+            - name: {{ $name }}
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ $.Values.envFromConfigMap.name }}
+                  key: {{ $key }}
+            {{- end }}
+            {{- end }}
+          {{- if .Values.probes.readiness.enabled }}
+          readinessProbe:
+            {{- omit .Values.probes.readiness "enabled" | toYaml | nindent 12 }}
+          {{- end }}
+          {{- if .Values.probes.liveness.enabled }}
+          livenessProbe:
+            {{- omit .Values.probes.liveness "enabled" | toYaml | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            {{- if .Values.volumes.source.enabled }}
+            - name: source
+              mountPath: {{ .Values.volumes.source.mountPath }}
+            {{- end }}
+            {{- if .Values.volumes.nodeModules.enabled }}
+            - name: node-modules
+              mountPath: {{ .Values.volumes.nodeModules.mountPath }}
+            {{- end }}
+            {{- if .Values.volumes.nextCache.enabled }}
+            - name: next-cache
+              mountPath: {{ .Values.volumes.nextCache.mountPath }}
+            {{- end }}
+      volumes:
+        {{- if .Values.volumes.source.enabled }}
+        - name: source
+          {{- if eq .Values.volumes.source.type "hostPath" }}
+          hostPath:
+            path: {{ .Values.volumes.source.hostPath }}
+            type: Directory
+          {{- end }}
+        {{- end }}
+        {{- if .Values.volumes.nodeModules.enabled }}
+        - name: node-modules
+          emptyDir: {}
+        {{- end }}
+        {{- if .Values.volumes.nextCache.enabled }}
+        - name: next-cache
+          emptyDir: {}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+

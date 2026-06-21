@@ -1,0 +1,35 @@
+environment: prod
+
+replicaCount: 2
+
+env:
+  HOST: 0.0.0.0
+  PORT: "1337"
+  NODE_ENV: production
+  DATABASE_CLIENT: postgres
+  DATABASE_HOST: postgres
+  DATABASE_PORT: "5432"
+  DATABASE_SSL: "false"
+  S3_ENDPOINT: ""
+
+args:
+  - npm ci && npm run build && npm run start
+
+volumes:
+  source:
+    enabled: false
+    type: hostPath
+    mountPath: /workspace/apps/strapi
+    hostPath: /workspace/almadar-platform/apps/strapi
+  nodeModules:
+    enabled: false
+    mountPath: /workspace/apps/strapi/node_modules
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: "2"
+    memory: 2Gi
+
