@@ -173,7 +173,8 @@ Recommended provisioning order:
 8. GitHub Actions OCI runners: `docs/github-actions-runners.md`
 9. Strapi CI/CD workflow: `docs/github-actions-strapi.md`
 10. Disaster recovery runbook: `docs/runbooks/disaster-recovery.md`
-11. Architectural decision records: `docs/adr/`
+11. Pre-implementation architecture review: `docs/architecture-review.md`
+12. Architectural decision records: `docs/adr/`
 
 Each Terraform environment includes a README and a `terraform.tfvars.example`.
 Copy the example to `terraform.tfvars`, fill in real OCI values locally, then run:
