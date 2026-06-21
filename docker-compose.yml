@@ -52,18 +52,17 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-almadar}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio-password}
-      MINIO_BUCKET: ${MINIO_BUCKET:-iiif}
+      MINIO_ENDPOINT: http://minio:9000
+      IIIF_BUCKET: ${IIIF_BUCKET:-iiif-dev}
+      STRAPI_UPLOADS_BUCKET: ${STRAPI_UPLOADS_BUCKET:-strapi-dev}
+      MINIO_BUCKETS: ${MINIO_BUCKETS:-iiif-dev,strapi-dev}
     depends_on:
       minio:
         condition: service_healthy
+    volumes:
+      - ./infrastructure/minio/init-buckets.sh:/usr/local/bin/init-buckets.sh:ro
     entrypoint:
-      - /bin/sh
-      - -c
-      - |
-        set -eu
-        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
-        mc mb -p "local/$${MINIO_BUCKET}" || true
-        mc anonymous set download "local/$${MINIO_BUCKET}"
+      - /usr/local/bin/init-buckets.sh
     networks:
       - almadar
 
@@ -89,6 +88,17 @@ services:
       DATABASE_USERNAME: ${POSTGRES_USER:-almadar}
       DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-change-me-postgres-password}
       DATABASE_SSL: "false"
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-almadar}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-change-me-minio-password}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ENDPOINT: ${AWS_ENDPOINT:-http://minio:9000}
+      AWS_PUBLIC_ENDPOINT: ${AWS_PUBLIC_ENDPOINT:-http://localhost:9000}
+      AWS_BUCKET: ${STRAPI_UPLOADS_BUCKET:-strapi-dev}
+      AWS_ACL: ${AWS_ACL:-public-read}
+      AWS_SIGNED_URL_EXPIRES: ${AWS_SIGNED_URL_EXPIRES:-900}
+      AWS_S3_FORCE_PATH_STYLE: ${AWS_S3_FORCE_PATH_STYLE:-true}
+      STRAPI_UPLOADS_ROOT_PATH: ${STRAPI_UPLOADS_ROOT_PATH:-uploads}
+      STRAPI_UPLOADS_BASE_URL: ${STRAPI_UPLOADS_BASE_URL:-http://localhost:9000/strapi-dev}
       NODE_ENV: development
     ports:
       - "${STRAPI_PORT:-1337}:${STRAPI_PORT:-1337}"
@@ -150,16 +160,29 @@ services:
     platform: linux/amd64
     restart: unless-stopped
     environment:
-      CANTALOUPE_CONFIG: /etc/cantaloupe/cantaloupe.properties
+      CONFIG_FILE: /tmp/cantaloupe.properties
+      CANTALOUPE_ENDPOINT_API_ENABLED: "true"
+      CANTALOUPE_SOURCE_STATIC: S3Source
+      CANTALOUPE_S3SOURCE_ENDPOINT: ${AWS_ENDPOINT:-http://minio:9000}
+      CANTALOUPE_S3SOURCE_REGION: ${AWS_REGION:-us-east-1}
+      CANTALOUPE_S3SOURCE_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-almadar}
+      CANTALOUPE_S3SOURCE_SECRET_KEY: ${AWS_SECRET_ACCESS_KEY:-change-me-minio-password}
+      CANTALOUPE_S3SOURCE_LOOKUP_STRATEGY: BasicLookupStrategy
+      CANTALOUPE_S3SOURCE_BASICLOOKUPSTRATEGY_BUCKET_NAME: ${IIIF_BUCKET:-iiif-dev}
+      CANTALOUPE_S3SOURCE_BASICLOOKUPSTRATEGY_PATH_PREFIX: ${CANTALOUPE_S3_PREFIX:-}
+      CANTALOUPE_S3SOURCE_BASICLOOKUPSTRATEGY_PATH_SUFFIX: ${CANTALOUPE_S3_SUFFIX:-}
+      CANTALOUPE_S3SOURCE_CHUNKING_ENABLED: "true"
+      CANTALOUPE_S3SOURCE_CHUNKING_CHUNK_SIZE: 512K
+      CANTALOUPE_CACHE_SERVER_DERIVATIVE_ENABLED: "true"
+      CANTALOUPE_CACHE_SERVER_DERIVATIVE: FilesystemCache
+      CANTALOUPE_FILESYSTEMCACHE_PATHNAME: /var/cache/cantaloupe
     ports:
       - "${CANTALOUPE_PORT:-8182}:8182"
     volumes:
-      - ./infrastructure/cantaloupe/cantaloupe.properties:/etc/cantaloupe/cantaloupe.properties
-      - cantaloupe_images:/var/lib/cantaloupe/images
       - cantaloupe_cache:/var/cache/cantaloupe
     depends_on:
-      minio:
-        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:8182/ || curl -fsS http://localhost:8182/ || exit 1"]
       interval: 10s
@@ -181,5 +204,4 @@ volumes:
   strapi_uploads:
   frontend_node_modules:
   frontend_next_cache:
-  cantaloupe_images:
   cantaloupe_cache:
