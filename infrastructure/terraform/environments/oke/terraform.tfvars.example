@@ -1,0 +1,26 @@
+tenancy_ocid     = "ocid1.tenancy.oc1..example"
+user_ocid        = "ocid1.user.oc1..example"
+fingerprint      = "00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00"
+private_key_path = "~/.oci/oci_api_key.pem"
+compartment_id   = "ocid1.compartment.oc1..example"
+
+region       = "me-riyadh-1"
+project_name = "almadar"
+
+vcn_id                = "ocid1.vcn.oc1.me-riyadh-1.example"
+endpoint_subnet_id    = "ocid1.subnet.oc1.me-riyadh-1.exampleprivate"
+worker_subnet_id      = "ocid1.subnet.oc1.me-riyadh-1.exampleprivate"
+service_lb_subnet_ids = ["ocid1.subnet.oc1.me-riyadh-1.examplepublic"]
+nsg_ids               = ["ocid1.networksecuritygroup.oc1.me-riyadh-1.exampleoke"]
+
+kubernetes_version = "v1.33.1"
+node_image_id      = "ocid1.image.oc1.me-riyadh-1.example"
+availability_domain = "example:ME-RIYADH-1-AD-1"
+ssh_public_key     = "ssh-rsa AAAA..."
+
+is_public_endpoint_enabled = false
+kubeconfig_path            = "./generated/oke-kubeconfig.yaml"
+
+freeform_tags = {
+  Owner = "platform"
+}

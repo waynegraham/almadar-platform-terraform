@@ -1,0 +1,6 @@
+kubeconfig_path    = "../oke/generated/oke-kubeconfig.yaml"
+kubeconfig_context = null
+
+namespaces = ["dev", "test", "prod"]
+
+deployer_service_account_name = "deployer"
