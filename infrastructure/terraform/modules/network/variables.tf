@@ -33,6 +33,12 @@ variable "subnets" {
   }))
 }
 
+variable "create_service_gateway" {
+  description = "Create an OCI Service Gateway and private route to Oracle services."
+  type        = bool
+  default     = true
+}
+
 variable "freeform_tags" {
   description = "Freeform tags applied to resources."
   type        = map(string)

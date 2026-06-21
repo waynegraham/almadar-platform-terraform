@@ -41,6 +41,17 @@ variable "kubernetes_version" {
   default     = "v1.33.1"
 }
 
+variable "create_service_gateway" {
+  description = "Create OCI Service Gateways for private access to Oracle services. Requires valid OCI credentials during plan because Terraform reads regional service metadata."
+  type        = bool
+  default     = false
+}
+
+variable "object_storage_namespace" {
+  description = "OCI Object Storage namespace for the tenancy."
+  type        = string
+}
+
 variable "create_node_pool" {
   description = "Create OKE managed node pools."
   type        = bool

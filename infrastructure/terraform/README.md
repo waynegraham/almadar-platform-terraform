@@ -31,7 +31,7 @@ cd infrastructure/terraform/environments/dev
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Edit `terraform.tfvars` with OCI tenancy, user, fingerprint, key path, compartment, and SSH key values.
+Edit `terraform.tfvars` with OCI tenancy, user, fingerprint, key path, compartment, Object Storage namespace, and SSH key values.
 
 Initialize and plan:
 
@@ -40,4 +40,4 @@ terraform init
 terraform plan
 ```
 
-By default, OKE node pools and PostgreSQL are disabled in the example variables to avoid provisioning compute/database capacity before the network and buckets are reviewed. Set `create_node_pool = true` and `postgresql.enabled = true` when those resources are ready to be provisioned.
+By default, OKE node pools, PostgreSQL, and OCI Service Gateways are disabled in the example variables to avoid provisioning compute/database capacity and to allow the sample plan to run without regional OCI service metadata lookups. Set `create_service_gateway = true`, `create_node_pool = true`, and `postgresql.enabled = true` when those resources are ready to be provisioned with real OCI credentials.

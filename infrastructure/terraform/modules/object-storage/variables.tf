@@ -13,6 +13,11 @@ variable "region_key" {
   type        = string
 }
 
+variable "namespace" {
+  description = "OCI Object Storage namespace for the tenancy."
+  type        = string
+}
+
 variable "buckets" {
   description = "Object Storage buckets keyed by logical name."
   type = map(object({

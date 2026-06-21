@@ -4,15 +4,11 @@ locals {
   })
 }
 
-data "oci_objectstorage_namespace" "this" {
-  compartment_id = var.compartment_id
-}
-
 resource "oci_objectstorage_bucket" "this" {
   for_each = var.buckets
 
   compartment_id        = var.compartment_id
-  namespace             = data.oci_objectstorage_namespace.this.namespace
+  namespace             = var.namespace
   name                  = each.value.name
   access_type           = each.value.access_type
   storage_tier          = each.value.storage_tier

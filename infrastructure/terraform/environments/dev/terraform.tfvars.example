@@ -7,6 +7,9 @@ compartment_id   = "ocid1.compartment.oc1..example"
 project_name = "almadar"
 environment  = "dev"
 
+object_storage_namespace = "example-namespace"
+create_service_gateway   = false
+
 kubernetes_version = "v1.33.1"
 create_node_pool   = false
 

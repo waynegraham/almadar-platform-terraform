@@ -31,17 +31,21 @@ resource "oci_core_nat_gateway" "this" {
 }
 
 resource "oci_core_service_gateway" "this" {
+  count = var.create_service_gateway ? 1 : 0
+
   compartment_id = var.compartment_id
   display_name   = "${var.name_prefix}-${var.region_key}-sgw"
   vcn_id         = oci_core_vcn.this.id
   freeform_tags  = local.common_tags
 
   services {
-    service_id = data.oci_core_services.all.services[0].id
+    service_id = data.oci_core_services.all[0].services[0].id
   }
 }
 
 data "oci_core_services" "all" {
+  count = var.create_service_gateway ? 1 : 0
+
   filter {
     name   = "name"
     values = ["All .* Services In Oracle Services Network"]
@@ -74,10 +78,14 @@ resource "oci_core_route_table" "private" {
     destination_type  = "CIDR_BLOCK"
   }
 
-  route_rules {
-    network_entity_id = oci_core_service_gateway.this.id
-    destination       = data.oci_core_services.all.services[0].cidr_block
-    destination_type  = "SERVICE_CIDR_BLOCK"
+  dynamic "route_rules" {
+    for_each = var.create_service_gateway ? [1] : []
+
+    content {
+      network_entity_id = oci_core_service_gateway.this[0].id
+      destination       = data.oci_core_services.all[0].services[0].cidr_block
+      destination_type  = "SERVICE_CIDR_BLOCK"
+    }
   }
 }
 

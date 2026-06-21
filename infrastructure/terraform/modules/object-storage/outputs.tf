@@ -1,6 +1,6 @@
 output "namespace" {
   description = "Object Storage namespace."
-  value       = data.oci_objectstorage_namespace.this.namespace
+  value       = var.namespace
 }
 
 output "bucket_names" {

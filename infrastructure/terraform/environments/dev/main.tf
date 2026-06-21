@@ -93,13 +93,14 @@ module "network_riyadh" {
     oci = oci.riyadh
   }
 
-  compartment_id  = var.compartment_id
-  name_prefix     = local.name_prefix
-  region_key      = local.regions.riyadh.region_key
-  vcn_cidr_blocks = local.regions.riyadh.vcn_cidrs
-  dns_label       = local.regions.riyadh.dns_label
-  subnets         = local.regions.riyadh.subnets
-  freeform_tags   = local.common_tags
+  compartment_id         = var.compartment_id
+  name_prefix            = local.name_prefix
+  region_key             = local.regions.riyadh.region_key
+  vcn_cidr_blocks        = local.regions.riyadh.vcn_cidrs
+  dns_label              = local.regions.riyadh.dns_label
+  subnets                = local.regions.riyadh.subnets
+  create_service_gateway = var.create_service_gateway
+  freeform_tags          = local.common_tags
 }
 
 module "network_jeddah" {
@@ -109,13 +110,14 @@ module "network_jeddah" {
     oci = oci.jeddah
   }
 
-  compartment_id  = var.compartment_id
-  name_prefix     = local.name_prefix
-  region_key      = local.regions.jeddah.region_key
-  vcn_cidr_blocks = local.regions.jeddah.vcn_cidrs
-  dns_label       = local.regions.jeddah.dns_label
-  subnets         = local.regions.jeddah.subnets
-  freeform_tags   = local.common_tags
+  compartment_id         = var.compartment_id
+  name_prefix            = local.name_prefix
+  region_key             = local.regions.jeddah.region_key
+  vcn_cidr_blocks        = local.regions.jeddah.vcn_cidrs
+  dns_label              = local.regions.jeddah.dns_label
+  subnets                = local.regions.jeddah.subnets
+  create_service_gateway = var.create_service_gateway
+  freeform_tags          = local.common_tags
 }
 
 module "object_storage_riyadh" {
@@ -128,6 +130,7 @@ module "object_storage_riyadh" {
   compartment_id = var.compartment_id
   name_prefix    = local.name_prefix
   region_key     = local.regions.riyadh.region_key
+  namespace      = var.object_storage_namespace
   buckets        = local.buckets.riyadh
   freeform_tags  = local.common_tags
 }
@@ -142,6 +145,7 @@ module "object_storage_jeddah" {
   compartment_id = var.compartment_id
   name_prefix    = local.name_prefix
   region_key     = local.regions.jeddah.region_key
+  namespace      = var.object_storage_namespace
   buckets        = local.buckets.jeddah
   freeform_tags  = local.common_tags
 }
