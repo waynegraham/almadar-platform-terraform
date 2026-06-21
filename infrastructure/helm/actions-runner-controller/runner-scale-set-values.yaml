@@ -1,0 +1,54 @@
+# Values for the official ARC gha-runner-scale-set chart.
+# This scale set registers ephemeral self-hosted runners at the GitHub
+# organization level. Replace <GITHUB_ORG> before installation.
+#
+# helm upgrade --install almadar-oci-runners \
+#   oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set \
+#   --namespace arc-runners \
+#   --values infrastructure/helm/actions-runner-controller/runner-scale-set-values.yaml \
+#   --set githubConfigUrl=https://github.com/<GITHUB_ORG>
+
+githubConfigUrl: "https://github.com/<GITHUB_ORG>"
+githubConfigSecret: arc-github-app
+
+runnerScaleSetName: almadar-oci-oke
+
+# Keep no idle runners by default. ARC creates short-lived runner pods when
+# GitHub queues jobs for this scale set, up to maxRunners.
+minRunners: 0
+maxRunners: 10
+
+controllerServiceAccount:
+  namespace: arc-system
+  name: arc-gha-rs-controller
+
+containerMode:
+  type: dind
+
+template:
+  metadata:
+    labels:
+      app.kubernetes.io/part-of: almadar-platform
+      almadar.io/component: github-actions-runner
+  spec:
+    serviceAccountName: arc-runner
+    automountServiceAccountToken: false
+    restartPolicy: Never
+    containers:
+      - name: runner
+        image: ghcr.io/actions/actions-runner:latest
+        command:
+          - /home/runner/run.sh
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: "2"
+            memory: 4Gi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

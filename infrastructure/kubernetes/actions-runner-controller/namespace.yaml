@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: arc-system
+  labels:
+    app.kubernetes.io/name: actions-runner-controller
+    app.kubernetes.io/part-of: almadar-platform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: arc-runners
+  labels:
+    app.kubernetes.io/name: actions-runner-controller
+    app.kubernetes.io/part-of: almadar-platform

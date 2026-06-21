@@ -1,0 +1,28 @@
+# Values for the official ARC gha-runner-scale-set-controller chart.
+# Install into the arc-system namespace:
+# helm upgrade --install arc \
+#   oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller \
+#   --namespace arc-system \
+#   --values infrastructure/helm/actions-runner-controller/controller-values.yaml
+
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+podAnnotations:
+  almadar.io/component: github-actions-runner-controller
+
+podLabels:
+  app.kubernetes.io/part-of: almadar-platform
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

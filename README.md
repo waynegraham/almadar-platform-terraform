@@ -170,6 +170,7 @@ Recommended provisioning order:
 5. OKE namespaces and RBAC: `infrastructure/terraform/environments/oke-rbac`
 6. Vault secrets: `infrastructure/terraform/environments/vault`
 7. External Secrets manifests: `infrastructure/kubernetes/external-secrets`
+8. GitHub Actions OCI runners: `docs/github-actions-runners.md`
 
 Each Terraform environment includes a README and a `terraform.tfvars.example`.
 Copy the example to `terraform.tfvars`, fill in real OCI values locally, then run:
@@ -193,6 +194,9 @@ OCI Vault stores per-environment JSON payloads for:
 - JWT secrets
 - Strapi secrets
 - S3-compatible Object Storage credentials
+
+OCI Vault also stores the GitHub App credentials used by Actions Runner
+Controller to register ephemeral organization runners.
 
 External Secrets creates an `almadar-secrets` Kubernetes Secret in each
 application namespace:
