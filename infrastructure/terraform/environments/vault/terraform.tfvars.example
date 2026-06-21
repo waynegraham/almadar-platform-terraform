@@ -1,0 +1,75 @@
+tenancy_ocid     = "ocid1.tenancy.oc1..example"
+user_ocid        = "ocid1.user.oc1..example"
+fingerprint      = "00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00"
+private_key_path = "~/.oci/oci_api_key.pem"
+compartment_id   = "ocid1.compartment.oc1..example"
+
+region       = "me-riyadh-1"
+project_name = "almadar"
+environments = ["dev", "test", "prod"]
+
+postgres_credentials = {
+  dev = {
+    DATABASE_HOST     = "postgres-dev.private"
+    DATABASE_PORT     = "5432"
+    DATABASE_NAME     = "strapi_dev"
+    DATABASE_USERNAME = "strapi_admin"
+    DATABASE_PASSWORD = "replace-in-terraform.tfvars"
+  }
+  test = {
+    DATABASE_HOST     = "postgres-test.private"
+    DATABASE_PORT     = "5432"
+    DATABASE_NAME     = "strapi_test"
+    DATABASE_USERNAME = "strapi_admin"
+    DATABASE_PASSWORD = "replace-in-terraform.tfvars"
+  }
+  prod = {
+    DATABASE_HOST     = "postgres-prod.private"
+    DATABASE_PORT     = "5432"
+    DATABASE_NAME     = "strapi_prod"
+    DATABASE_USERNAME = "strapi_admin"
+    DATABASE_PASSWORD = "replace-in-terraform.tfvars"
+  }
+}
+
+s3_credentials = {
+  dev = {
+    S3_ACCESS_KEY_ID     = "replace-in-terraform.tfvars"
+    S3_SECRET_ACCESS_KEY = "replace-in-terraform.tfvars"
+    S3_REGION            = "me-riyadh-1"
+    S3_BUCKET            = "strapi-dev"
+    IIIF_BUCKET          = "iiif-dev"
+    S3_ENDPOINT          = "https://example.compat.objectstorage.me-riyadh-1.oraclecloud.com"
+    S3_FORCE_PATH_STYLE  = "false"
+  }
+  test = {
+    S3_ACCESS_KEY_ID     = "replace-in-terraform.tfvars"
+    S3_SECRET_ACCESS_KEY = "replace-in-terraform.tfvars"
+    S3_REGION            = "me-riyadh-1"
+    S3_BUCKET            = "strapi-test"
+    IIIF_BUCKET          = "iiif-test"
+    S3_ENDPOINT          = "https://example.compat.objectstorage.me-riyadh-1.oraclecloud.com"
+    S3_FORCE_PATH_STYLE  = "false"
+  }
+  prod = {
+    S3_ACCESS_KEY_ID     = "replace-in-terraform.tfvars"
+    S3_SECRET_ACCESS_KEY = "replace-in-terraform.tfvars"
+    S3_REGION            = "me-riyadh-1"
+    S3_BUCKET            = "strapi-prod"
+    IIIF_BUCKET          = "iiif-prod"
+    S3_ENDPOINT          = "https://example.compat.objectstorage.me-riyadh-1.oraclecloud.com"
+    S3_FORCE_PATH_STYLE  = "false"
+  }
+}
+
+jwt_secrets    = {}
+strapi_secrets = {}
+
+external_secrets_iam_policy_statements = [
+  # Example for OKE workload identity. Replace cluster OCID, namespace, and service account.
+  # "Allow any-user to read secret-bundles in compartment id ocid1.compartment.oc1..example where all {request.principal.type = 'workload', request.principal.cluster_id = 'ocid1.cluster.oc1..example', request.principal.namespace = 'external-secrets', request.principal.service_account = 'external-secrets'}"
+]
+
+freeform_tags = {
+  Owner = "platform"
+}
