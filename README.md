@@ -32,6 +32,7 @@ infrastructure/
   minio/                     MinIO bucket initialization
   postgresql/                PostgreSQL initialization
   terraform/                 Terraform infrastructure
+  kubernetes/                Shared Kubernetes manifests
   helm/                      Helm charts and values
   k3d/                       Local Kubernetes assets
 
@@ -52,6 +53,7 @@ Optional for infrastructure work:
 - kubectl
 - Helm
 - k3d
+- OCI account credentials with permission to manage networking, OKE, Object Storage, PostgreSQL, Vault, KMS, and IAM policies
 
 ## Quick Start
 
@@ -131,6 +133,86 @@ helm template almadar-dev-frontend infrastructure/helm/frontend \
 ```
 
 The `dev` values are intended for local development. The `prod` values assume a production image or deployment pipeline provides application code and production secrets.
+
+## OCI Infrastructure
+
+Production infrastructure is managed with Terraform under `infrastructure/terraform/`.
+
+```text
+infrastructure/terraform/
+  modules/
+    network/
+    object-storage/
+    kubernetes/
+    kubernetes-rbac/
+    managed-postgresql/
+    vault-secrets/
+  environments/
+    network/
+    object-storage/
+    postgresql/
+    oke/
+    oke-rbac/
+    vault/
+```
+
+The OCI regions currently targeted are:
+
+- Riyadh: `me-riyadh-1`
+- Jeddah: `me-jeddah-1`
+
+Recommended provisioning order:
+
+1. Network: `infrastructure/terraform/environments/network`
+2. Object Storage: `infrastructure/terraform/environments/object-storage`
+3. PostgreSQL: `infrastructure/terraform/environments/postgresql`
+4. OKE: `infrastructure/terraform/environments/oke`
+5. OKE namespaces and RBAC: `infrastructure/terraform/environments/oke-rbac`
+6. Vault secrets: `infrastructure/terraform/environments/vault`
+7. External Secrets manifests: `infrastructure/kubernetes/external-secrets`
+
+Each Terraform environment includes a README and a `terraform.tfvars.example`.
+Copy the example to `terraform.tfvars`, fill in real OCI values locally, then run:
+
+```bash
+terraform init
+terraform plan
+terraform apply
+```
+
+Do not commit `terraform.tfvars` or generated kubeconfig files.
+
+## Secrets
+
+Application secrets are stored in OCI Vault and synchronized into Kubernetes by
+External Secrets Operator. Secret values are not stored in Git.
+
+OCI Vault stores per-environment JSON payloads for:
+
+- PostgreSQL credentials
+- JWT secrets
+- Strapi secrets
+- S3-compatible Object Storage credentials
+
+External Secrets creates an `almadar-secrets` Kubernetes Secret in each
+application namespace:
+
+- `dev`
+- `test`
+- `prod`
+
+The Strapi and Cantaloupe Helm charts already read from `almadar-secrets`.
+
+Apply the External Secrets manifests after OKE, namespaces, Vault, and IAM
+policy configuration are in place:
+
+```bash
+kubectl apply -k infrastructure/kubernetes/external-secrets
+```
+
+Terraform state for the Vault stack contains secret payloads because Terraform
+manages OCI Vault secret versions. Use an encrypted remote backend for shared
+environments.
 
 ## Make Targets
 
