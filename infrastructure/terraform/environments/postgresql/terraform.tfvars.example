@@ -1,0 +1,40 @@
+tenancy_ocid     = "ocid1.tenancy.oc1..example"
+user_ocid        = "ocid1.user.oc1..example"
+fingerprint      = "00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00"
+private_key_path = "~/.oci/oci_api_key.pem"
+compartment_id   = "ocid1.compartment.oc1..example"
+
+region       = "me-riyadh-1"
+project_name = "almadar"
+
+database_subnet_ids = {
+  dev  = "ocid1.subnet.oc1.me-riyadh-1.exampledev"
+  test = "ocid1.subnet.oc1.me-riyadh-1.exampletest"
+  prod = "ocid1.subnet.oc1.me-riyadh-1.exampleprod"
+}
+
+database_nsg_ids = {
+  dev  = ["ocid1.networksecuritygroup.oc1.me-riyadh-1.exampledev"]
+  test = ["ocid1.networksecuritygroup.oc1.me-riyadh-1.exampletest"]
+  prod = ["ocid1.networksecuritygroup.oc1.me-riyadh-1.exampleprod"]
+}
+
+admin_username = "strapi_admin"
+
+# Prefer admin_password_secret_ids for shared environments.
+admin_passwords = {
+  dev  = "change-me-dev"
+  test = "change-me-test"
+  prod = "change-me-prod"
+}
+
+admin_password_secret_ids = {}
+
+shape                         = "VM.Standard.E4.Flex"
+instance_ocpu_count           = 2
+instance_memory_size_in_gbs   = 16
+backup_retention_days         = 14
+
+freeform_tags = {
+  Owner = "platform"
+}
