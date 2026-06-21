@@ -161,8 +161,6 @@ services:
     restart: unless-stopped
     environment:
       CONFIG_FILE: /tmp/cantaloupe.properties
-      CANTALOUPE_ENDPOINT_API_ENABLED: "true"
-      CANTALOUPE_SOURCE_STATIC: S3Source
       CANTALOUPE_S3SOURCE_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
       CANTALOUPE_S3SOURCE_REGION: ${S3_REGION:-us-east-1}
       CANTALOUPE_S3SOURCE_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-almadar}
@@ -179,6 +177,7 @@ services:
     ports:
       - "${CANTALOUPE_PORT:-8182}:8182"
     volumes:
+      - ./infrastructure/cantaloupe/cantaloupe.properties:/etc/cantaloupe/cantaloupe.properties.tmpl:ro
       - cantaloupe_cache:/var/cache/cantaloupe
     depends_on:
       minio-init:
