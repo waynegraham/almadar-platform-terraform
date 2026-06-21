@@ -223,6 +223,129 @@ docs/
 
 ---
 
+# Repository Workflows
+
+## Local Development
+
+Use the Makefile for common local tasks:
+
+```bash
+make bootstrap    # Install frontend and Strapi dependencies locally
+make local-up     # Start Docker Compose services
+make local-down   # Stop Docker Compose services
+make test         # Run app test scripts where defined
+make lint         # Run app lint scripts where defined
+```
+
+`make local-up` runs the Docker Compose stack: Next.js, Strapi, PostgreSQL,
+MinIO, MinIO bucket initialization, and Cantaloupe.
+
+Useful direct Compose commands:
+
+```bash
+docker compose ps
+docker compose logs -f
+docker compose config --quiet
+docker compose up -d --force-recreate strapi
+docker compose up -d --force-recreate minio-init
+docker compose down
+docker compose down -v
+```
+
+Only use `docker compose down -v` when local state can be discarded.
+
+## App Commands
+
+Frontend commands are run from `apps/frontend`:
+
+```bash
+npm install
+npm run dev
+npm run build
+npm run lint
+npm test
+```
+
+Strapi commands are run from `apps/strapi`:
+
+```bash
+npm install
+npm run develop
+npm run build
+npm run migrate
+npm test
+```
+
+The Strapi `test` script currently runs `npm run build`.
+
+## Local Kubernetes
+
+Use k3d when validating Kubernetes manifests or local cluster behavior.
+Stop Docker Compose first because k3d binds the same local ports.
+
+```bash
+docker compose down
+./infrastructure/k3d/bootstrap.sh
+kubectl -n dev get pods
+kubectl -n dev get svc
+./infrastructure/k3d/delete.sh
+```
+
+## Helm Validation
+
+Charts live under `infrastructure/helm/`. Lint chart defaults and
+environment-specific values before changing deployable packaging:
+
+```bash
+helm lint infrastructure/helm/frontend
+helm lint infrastructure/helm/frontend -f infrastructure/helm/frontend/values-dev.yaml
+helm lint infrastructure/helm/strapi
+helm lint infrastructure/helm/strapi -f infrastructure/helm/strapi/values-dev.yaml
+helm lint infrastructure/helm/cantaloupe
+helm lint infrastructure/helm/cantaloupe -f infrastructure/helm/cantaloupe/values-dev.yaml
+```
+
+Render templates locally when reviewing Kubernetes output:
+
+```bash
+helm template almadar-dev-frontend infrastructure/helm/frontend \
+  -f infrastructure/helm/frontend/values-dev.yaml \
+  --namespace dev
+```
+
+## Platform Validation Tests
+
+Deployment validation tests live in `tests/validation` and use Playwright,
+PostgreSQL, and S3-compatible object storage clients.
+
+```bash
+cd tests/validation
+npm ci
+npm test
+npm run typecheck
+```
+
+Local defaults target Docker Compose and k3d ports. Production validation must
+set explicit endpoint, database, object storage, and Strapi upload token
+environment variables as documented in `tests/validation/README.md`.
+
+## Terraform Workflow
+
+Terraform environments live under `infrastructure/terraform/environments/`.
+Each environment has its own README and `terraform.tfvars.example`.
+
+```bash
+terraform init
+terraform plan
+terraform apply
+```
+
+Do not commit `terraform.tfvars`, generated kubeconfig files, or Terraform
+state files. Vault state contains secret payloads and must use an encrypted
+remote backend for shared environments.
+
+---
+
 # Terraform Standards
 
 ## Rules
