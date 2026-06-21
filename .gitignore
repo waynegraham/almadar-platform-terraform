@@ -59,6 +59,7 @@ override.tf.json
 *_override.tf
 *_override.tf.json
 .terraform.lock.hcl
+!infrastructure/terraform/environments/**/.terraform.lock.hcl
 
 # Kubernetes and Helm generated files
 *.kubeconfig
@@ -67,4 +68,3 @@ charts/
 # Strapi runtime uploads can be large and environment-specific.
 apps/strapi/public/uploads/*
 !apps/strapi/public/uploads/.gitkeep
-

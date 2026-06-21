@@ -1,0 +1,38 @@
+tenancy_ocid     = "ocid1.tenancy.oc1..example"
+user_ocid        = "ocid1.user.oc1..example"
+fingerprint      = "00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00"
+private_key_path = "~/.oci/oci_api_key.pem"
+compartment_id   = "ocid1.compartment.oc1..example"
+
+project_name = "almadar"
+environment  = "dev"
+
+kubernetes_version = "v1.33.1"
+create_node_pool   = false
+
+# Required only when create_node_pool = true.
+ssh_public_key = null
+node_image_ids = {
+  riyadh = null
+  jeddah = null
+}
+node_pool_availability_domains = {
+  riyadh = null
+  jeddah = null
+}
+
+postgresql = {
+  enabled                     = false
+  admin_username              = "almadar_admin"
+  admin_password              = null
+  db_version                  = "16"
+  shape                       = "VM.Standard.E4.Flex"
+  instance_count              = 1
+  instance_ocpu_count         = 2
+  instance_memory_size_in_gbs = 16
+  backup_retention_days       = 14
+}
+
+freeform_tags = {
+  Owner = "platform"
+}
