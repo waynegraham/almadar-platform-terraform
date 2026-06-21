@@ -1,0 +1,38 @@
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: almadar-dev
+servers: 1
+agents: 1
+ports:
+  - port: "3000:30080"
+    nodeFilters:
+      - loadbalancer
+  - port: "1337:31337"
+    nodeFilters:
+      - loadbalancer
+  - port: "5432:30432"
+    nodeFilters:
+      - loadbalancer
+  - port: "9000:30900"
+    nodeFilters:
+      - loadbalancer
+  - port: "9001:30901"
+    nodeFilters:
+      - loadbalancer
+  - port: "8182:31820"
+    nodeFilters:
+      - loadbalancer
+volumes:
+  - volume: "__PROJECT_ROOT__:/workspace/almadar-platform"
+    nodeFilters:
+      - server:*
+      - agent:*
+options:
+  k3d:
+    wait: true
+    timeout: "120s"
+  kubeconfig:
+    updateDefaultKubeconfig: true
+    switchCurrentContext: true
+

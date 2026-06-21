@@ -1,0 +1,190 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: strapi
+  namespace: dev
+spec:
+  type: NodePort
+  selector:
+    app: strapi
+  ports:
+    - name: http
+      port: 1337
+      targetPort: 1337
+      nodePort: 31337
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: strapi
+  namespace: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: strapi
+  template:
+    metadata:
+      labels:
+        app: strapi
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:17
+          command:
+            - sh
+            - -c
+            - until pg_isready -h postgres -p 5432; do sleep 2; done
+        - name: wait-for-minio
+          image: curlimages/curl:latest
+          command:
+            - sh
+            - -c
+            - until curl -fsS http://minio:9000/minio/health/ready; do sleep 2; done
+      containers:
+        - name: strapi
+          image: node:22-alpine
+          imagePullPolicy: IfNotPresent
+          workingDir: /workspace/apps/strapi
+          command:
+            - sh
+            - -c
+            - npm ci && npm run develop
+          ports:
+            - containerPort: 1337
+              name: http
+          env:
+            - name: HOST
+              value: 0.0.0.0
+            - name: PORT
+              value: "1337"
+            - name: NODE_ENV
+              value: development
+            - name: DATABASE_CLIENT
+              value: postgres
+            - name: DATABASE_HOST
+              value: postgres
+            - name: DATABASE_PORT
+              value: "5432"
+            - name: DATABASE_SSL
+              value: "false"
+            - name: DATABASE_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: almadar-config
+                  key: POSTGRES_DB
+            - name: DATABASE_USERNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: almadar-config
+                  key: POSTGRES_USER
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: almadar-secrets
+                  key: POSTGRES_PASSWORD
+            - name: S3_ENDPOINT
+              value: http://minio:9000
+            - name: S3_ACCESS_KEY_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: almadar-config
+                  key: S3_ACCESS_KEY_ID
+            - name: S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: almadar-secrets
+                  key: S3_SECRET_ACCESS_KEY
+            - name: S3_REGION
+              valueFrom:
+                configMapKeyRef:
+                  name: almadar-config
+                  key: S3_REGION
+            - name: S3_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: almadar-config
+                  key: S3_BUCKET
+            - name: S3_ACL
+              valueFrom:
+                configMapKeyRef:
+                  name: almadar-config
+                  key: S3_ACL
+            - name: S3_SIGNED_URL_EXPIRES
+              valueFrom:
+                configMapKeyRef:
+                  name: almadar-config
+                  key: S3_SIGNED_URL_EXPIRES
+            - name: S3_FORCE_PATH_STYLE
+              valueFrom:
+                configMapKeyRef:
+                  name: almadar-config
+                  key: S3_FORCE_PATH_STYLE
+            - name: S3_ROOT_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: almadar-config
+                  key: S3_ROOT_PATH
+            - name: S3_PUBLIC_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: almadar-config
+                  key: S3_PUBLIC_BASE_URL
+            - name: STRAPI_UPLOADS_CSP_SRC
+              valueFrom:
+                configMapKeyRef:
+                  name: almadar-config
+                  key: STRAPI_UPLOADS_CSP_SRC
+            - name: APP_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: almadar-secrets
+                  key: APP_KEYS
+            - name: API_TOKEN_SALT
+              valueFrom:
+                secretKeyRef:
+                  name: almadar-secrets
+                  key: API_TOKEN_SALT
+            - name: ADMIN_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: almadar-secrets
+                  key: ADMIN_JWT_SECRET
+            - name: TRANSFER_TOKEN_SALT
+              valueFrom:
+                secretKeyRef:
+                  name: almadar-secrets
+                  key: TRANSFER_TOKEN_SALT
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: almadar-secrets
+                  key: JWT_SECRET
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: almadar-secrets
+                  key: ENCRYPTION_KEY
+          readinessProbe:
+            tcpSocket:
+              port: 1337
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 1337
+            initialDelaySeconds: 90
+            periodSeconds: 20
+          volumeMounts:
+            - name: strapi-source
+              mountPath: /workspace/apps/strapi
+            - name: strapi-node-modules
+              mountPath: /workspace/apps/strapi/node_modules
+      volumes:
+        - name: strapi-source
+          hostPath:
+            path: /workspace/almadar-platform/apps/strapi
+            type: Directory
+        - name: strapi-node-modules
+          emptyDir: {}
+
