@@ -1,0 +1,185 @@
+name: almadar-platform
+
+services:
+  postgres:
+    image: postgres:17
+    container_name: almadar-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-almadar}
+      POSTGRES_USER: ${POSTGRES_USER:-almadar}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-postgres-password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgresql/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - almadar
+
+  minio:
+    image: minio/minio:latest
+    container_name: almadar-minio
+    restart: unless-stopped
+    command: server /data --console-address ":${MINIO_CONSOLE_PORT:-9001}"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-almadar}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio-password}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:${MINIO_CONSOLE_PORT:-9001}"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - almadar
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: almadar-minio-init
+    restart: "no"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-almadar}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio-password}
+      MINIO_BUCKET: ${MINIO_BUCKET:-iiif}
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        mc mb -p "local/$${MINIO_BUCKET}" || true
+        mc anonymous set download "local/$${MINIO_BUCKET}"
+    networks:
+      - almadar
+
+  strapi:
+    image: node:22-alpine
+    container_name: almadar-strapi
+    restart: unless-stopped
+    working_dir: /workspace/apps/strapi
+    command: sh -c "npm ci && npm run develop"
+    environment:
+      HOST: ${STRAPI_HOST:-0.0.0.0}
+      PORT: ${STRAPI_PORT:-1337}
+      APP_KEYS: ${APP_KEYS:-change-me-key-1,change-me-key-2}
+      API_TOKEN_SALT: ${API_TOKEN_SALT:-change-me-api-token-salt}
+      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET:-change-me-admin-jwt-secret}
+      TRANSFER_TOKEN_SALT: ${TRANSFER_TOKEN_SALT:-change-me-transfer-token-salt}
+      JWT_SECRET: ${JWT_SECRET:-change-me-jwt-secret}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-change-me-encryption-key}
+      DATABASE_CLIENT: postgres
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${POSTGRES_DB:-almadar}
+      DATABASE_USERNAME: ${POSTGRES_USER:-almadar}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-change-me-postgres-password}
+      DATABASE_SSL: "false"
+      NODE_ENV: development
+    ports:
+      - "${STRAPI_PORT:-1337}:${STRAPI_PORT:-1337}"
+    volumes:
+      - ./apps/strapi:/workspace/apps/strapi
+      - strapi_node_modules:/workspace/apps/strapi/node_modules
+      - strapi_uploads:/workspace/apps/strapi/public/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - node -e "const net=require('node:net');const s=net.connect(Number(process.env.PORT||1337),'127.0.0.1',()=>process.exit(0));s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),3000);"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 90s
+    networks:
+      - almadar
+
+  frontend:
+    image: node:22-alpine
+    container_name: almadar-frontend
+    restart: unless-stopped
+    working_dir: /workspace/apps/frontend
+    command: sh -c "npm ci && npm run dev -- --hostname 0.0.0.0 --port $${FRONTEND_PORT}"
+    environment:
+      NODE_ENV: development
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_STRAPI_URL: ${NEXT_PUBLIC_STRAPI_URL:-http://localhost:1337}
+      STRAPI_INTERNAL_URL: ${STRAPI_INTERNAL_URL:-http://strapi:1337}
+      FRONTEND_PORT: ${FRONTEND_PORT:-3000}
+    ports:
+      - "${FRONTEND_PORT:-3000}:${FRONTEND_PORT:-3000}"
+    volumes:
+      - ./apps/frontend:/workspace/apps/frontend
+      - frontend_node_modules:/workspace/apps/frontend/node_modules
+      - frontend_next_cache:/workspace/apps/frontend/.next
+    depends_on:
+      strapi:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - node -e "const net=require('node:net');const s=net.connect(Number(process.env.FRONTEND_PORT||3000),'127.0.0.1',()=>process.exit(0));s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),3000);"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    networks:
+      - almadar
+
+  cantaloupe:
+    image: uclalibrary/cantaloupe:5.0.7-0
+    container_name: almadar-cantaloupe
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      CANTALOUPE_CONFIG: /etc/cantaloupe/cantaloupe.properties
+    ports:
+      - "${CANTALOUPE_PORT:-8182}:8182"
+    volumes:
+      - ./infrastructure/cantaloupe/cantaloupe.properties:/etc/cantaloupe/cantaloupe.properties
+      - cantaloupe_images:/var/lib/cantaloupe/images
+      - cantaloupe_cache:/var/cache/cantaloupe
+    depends_on:
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8182/ || curl -fsS http://localhost:8182/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+    networks:
+      - almadar
+
+networks:
+  almadar:
+    name: almadar-local
+    driver: bridge
+
+volumes:
+  postgres_data:
+  minio_data:
+  strapi_node_modules:
+  strapi_uploads:
+  frontend_node_modules:
+  frontend_next_cache:
+  cantaloupe_images:
+  cantaloupe_cache:
