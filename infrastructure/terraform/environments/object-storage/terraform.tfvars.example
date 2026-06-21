@@ -1,0 +1,19 @@
+tenancy_ocid     = "ocid1.tenancy.oc1..example"
+user_ocid        = "ocid1.user.oc1..example"
+fingerprint      = "00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00"
+private_key_path = "~/.oci/oci_api_key.pem"
+
+compartment_id           = "ocid1.compartment.oc1..example"
+policy_compartment_id    = null
+region                   = "me-riyadh-1"
+object_storage_namespace = "example-namespace"
+
+project_name = "almadar"
+
+object_storage_admin_group_name  = "AlMadarObjectStorageAdmins"
+object_storage_writer_group_name = "AlMadarObjectStorageWriters"
+object_storage_reader_group_name = "AlMadarObjectStorageReaders"
+
+freeform_tags = {
+  Owner = "platform"
+}
