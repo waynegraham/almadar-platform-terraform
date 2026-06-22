@@ -12,7 +12,7 @@ This review covers the proposed OCI architecture for:
 - Strapi CMS
 - Cantaloupe IIIF image server
 - OCI Object Storage
-- OCI Database with PostgreSQL
+- OCI Database with PostgreSQL managed service
 - Cloudflare
 - GitHub Actions Runner Controller
 
@@ -22,7 +22,8 @@ nonprofit-sensitive infrastructure budget, and a 5-10 year project lifespan.
 ## Executive Assessment
 
 The proposed architecture is directionally sound for the platform scale. OCI
-Object Storage as canonical media storage, managed PostgreSQL, stateless
+Object Storage as canonical media storage, OCI Database with PostgreSQL,
+stateless
 application containers, Cloudflare at the edge, and deferring OpenSearch are all
 appropriate choices.
 
@@ -95,8 +96,8 @@ Recommendations:
 
 ### PostgreSQL Cost May Dominate Monthly Spend
 
-Separate managed PostgreSQL systems for `dev`, `test`, and `prod` improve
-isolation but may be expensive relative to the expected workload.
+Separate OCI Database with PostgreSQL managed DB systems for `dev`, `test`, and
+`prod` improve isolation but may be expensive relative to the expected workload.
 
 Recommendations:
 
@@ -112,13 +113,14 @@ Recommendations:
 
 ### Database TLS
 
-Production Strapi should use TLS when connecting to OCI PostgreSQL.
+Production Strapi should use TLS when connecting to OCI Database with
+PostgreSQL.
 
 Recommendations:
 
 - Set `DATABASE_SSL=true` for production.
-- Prefer certificate verification where OCI PostgreSQL support and operational
-  procedures allow it.
+- Prefer certificate verification where OCI Database with PostgreSQL support and
+  operational procedures allow it.
 - Avoid leaving production with `DATABASE_SSL_REJECT_UNAUTHORIZED=false` unless
   the exception is documented and revisited.
 

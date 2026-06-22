@@ -83,7 +83,7 @@ variable "ssh_public_key" {
 }
 
 variable "postgresql" {
-  description = "PostgreSQL configuration."
+  description = "OCI Database with PostgreSQL managed service configuration."
   type = object({
     enabled                     = optional(bool, false)
     admin_username              = optional(string, "almadar_admin")

@@ -197,49 +197,65 @@ module "kubernetes_jeddah" {
 }
 
 module "postgresql_riyadh" {
-  source = "../../modules/postgresql"
+  source = "../../modules/managed-postgresql"
 
   providers = {
     oci = oci.riyadh
   }
 
-  enabled                     = try(var.postgresql.enabled, false)
-  compartment_id              = var.compartment_id
-  name_prefix                 = local.name_prefix
-  region_key                  = local.regions.riyadh.region_key
-  subnet_id                   = module.network_riyadh.private_subnet_ids["private_data"]
-  nsg_ids                     = [module.network_riyadh.postgresql_nsg_id]
-  db_version                  = try(var.postgresql.db_version, "16")
-  admin_username              = try(var.postgresql.admin_username, "almadar_admin")
-  admin_password              = try(var.postgresql.admin_password, null)
-  shape                       = try(var.postgresql.shape, "VM.Standard.E4.Flex")
-  instance_count              = try(var.postgresql.instance_count, 1)
-  instance_ocpu_count         = try(var.postgresql.instance_ocpu_count, 2)
-  instance_memory_size_in_gbs = try(var.postgresql.instance_memory_size_in_gbs, 16)
-  backup_retention_days       = try(var.postgresql.backup_retention_days, 14)
-  freeform_tags               = local.common_tags
+  compartment_id = var.compartment_id
+  name_prefix    = "${local.name_prefix}-${local.regions.riyadh.region_key}"
+  databases = try(nonsensitive(var.postgresql.enabled), false) ? {
+    (var.environment) = {
+      database_name               = "strapi_${var.environment}"
+      subnet_id                   = module.network_riyadh.private_subnet_ids["private_data"]
+      nsg_ids                     = [module.network_riyadh.postgresql_nsg_id]
+      db_version                  = try(nonsensitive(var.postgresql.db_version), "16")
+      admin_username              = try(nonsensitive(var.postgresql.admin_username), "almadar_admin")
+      shape                       = try(nonsensitive(var.postgresql.shape), "VM.Standard.E4.Flex")
+      instance_count              = try(nonsensitive(var.postgresql.instance_count), 1)
+      instance_ocpu_count         = try(nonsensitive(var.postgresql.instance_ocpu_count), 2)
+      instance_memory_size_in_gbs = try(nonsensitive(var.postgresql.instance_memory_size_in_gbs), 16)
+      backup_retention_days       = try(nonsensitive(var.postgresql.backup_retention_days), 14)
+      description                 = "OCI Database with PostgreSQL managed DB system for Strapi ${var.environment} in ${local.regions.riyadh.region}."
+    }
+  } : {}
+  admin_passwords = try(nonsensitive(var.postgresql.enabled), false) ? {
+    (var.environment) = var.postgresql.admin_password
+  } : {}
+  freeform_tags = merge(local.common_tags, {
+    Region = local.regions.riyadh.region_key
+  })
 }
 
 module "postgresql_jeddah" {
-  source = "../../modules/postgresql"
+  source = "../../modules/managed-postgresql"
 
   providers = {
     oci = oci.jeddah
   }
 
-  enabled                     = try(var.postgresql.enabled, false)
-  compartment_id              = var.compartment_id
-  name_prefix                 = local.name_prefix
-  region_key                  = local.regions.jeddah.region_key
-  subnet_id                   = module.network_jeddah.private_subnet_ids["private_data"]
-  nsg_ids                     = [module.network_jeddah.postgresql_nsg_id]
-  db_version                  = try(var.postgresql.db_version, "16")
-  admin_username              = try(var.postgresql.admin_username, "almadar_admin")
-  admin_password              = try(var.postgresql.admin_password, null)
-  shape                       = try(var.postgresql.shape, "VM.Standard.E4.Flex")
-  instance_count              = try(var.postgresql.instance_count, 1)
-  instance_ocpu_count         = try(var.postgresql.instance_ocpu_count, 2)
-  instance_memory_size_in_gbs = try(var.postgresql.instance_memory_size_in_gbs, 16)
-  backup_retention_days       = try(var.postgresql.backup_retention_days, 14)
-  freeform_tags               = local.common_tags
+  compartment_id = var.compartment_id
+  name_prefix    = "${local.name_prefix}-${local.regions.jeddah.region_key}"
+  databases = try(nonsensitive(var.postgresql.enabled), false) ? {
+    (var.environment) = {
+      database_name               = "strapi_${var.environment}"
+      subnet_id                   = module.network_jeddah.private_subnet_ids["private_data"]
+      nsg_ids                     = [module.network_jeddah.postgresql_nsg_id]
+      db_version                  = try(nonsensitive(var.postgresql.db_version), "16")
+      admin_username              = try(nonsensitive(var.postgresql.admin_username), "almadar_admin")
+      shape                       = try(nonsensitive(var.postgresql.shape), "VM.Standard.E4.Flex")
+      instance_count              = try(nonsensitive(var.postgresql.instance_count), 1)
+      instance_ocpu_count         = try(nonsensitive(var.postgresql.instance_ocpu_count), 2)
+      instance_memory_size_in_gbs = try(nonsensitive(var.postgresql.instance_memory_size_in_gbs), 16)
+      backup_retention_days       = try(nonsensitive(var.postgresql.backup_retention_days), 14)
+      description                 = "OCI Database with PostgreSQL managed DB system for Strapi ${var.environment} in ${local.regions.jeddah.region}."
+    }
+  } : {}
+  admin_passwords = try(nonsensitive(var.postgresql.enabled), false) ? {
+    (var.environment) = var.postgresql.admin_password
+  } : {}
+  freeform_tags = merge(local.common_tags, {
+    Region = local.regions.jeddah.region_key
+  })
 }

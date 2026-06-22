@@ -1,16 +1,19 @@
-# OCI Managed PostgreSQL
+# OCI Database with PostgreSQL
 
-Terraform root for Strapi PostgreSQL on OCI Managed PostgreSQL.
+Terraform root for Strapi PostgreSQL on OCI Database with PostgreSQL, Oracle's
+managed PostgreSQL service.
 
 ## DB Systems
 
-This stack creates one managed PostgreSQL DB system per Strapi environment:
+This stack creates one OCI-managed PostgreSQL DB system per Strapi environment:
 
 - `strapi_dev`
 - `strapi_test`
 - `strapi_prod`
 
-The OCI PostgreSQL Terraform resource manages DB systems. OCI does not expose a separate Terraform resource for logical PostgreSQL databases, so the names above are emitted in the Strapi connection outputs as `DATABASE_NAME`.
+The OCI PostgreSQL Terraform resource manages DB systems. OCI does not expose a
+separate Terraform resource for logical PostgreSQL databases, so the names above
+are emitted in the Strapi connection outputs as `DATABASE_NAME`.
 
 ## Strapi Connection Outputs
 

@@ -2,6 +2,13 @@
 
 `almadar-platform` is the monorepo for the Almadar platform. It includes a Next.js frontend, a Strapi CMS, local object storage, PostgreSQL, and a Cantaloupe IIIF image server.
 
+For a non-technical introduction, infrastructure chart, and IT-oriented
+architecture summary, see [docs/platform-overview.md](docs/platform-overview.md).
+For recommended OCI server sizing and cost-bearing infrastructure, see
+[docs/oci-sizing-report.md](docs/oci-sizing-report.md).
+For simplification options and easier deployment paths, see
+[docs/simplification-report.md](docs/simplification-report.md).
+
 ## What Runs Locally
 
 `docker compose up` starts:
@@ -165,7 +172,7 @@ Recommended provisioning order:
 
 1. Network: `infrastructure/terraform/environments/network`
 2. Object Storage: `infrastructure/terraform/environments/object-storage`
-3. PostgreSQL: `infrastructure/terraform/environments/postgresql`
+3. OCI Database with PostgreSQL: `infrastructure/terraform/environments/postgresql`
 4. OKE: `infrastructure/terraform/environments/oke`
 5. OKE namespaces and RBAC: `infrastructure/terraform/environments/oke-rbac`
 6. Vault secrets: `infrastructure/terraform/environments/vault`

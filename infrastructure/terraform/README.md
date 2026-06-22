@@ -10,9 +10,11 @@ infrastructure/terraform/
     network/          VCN, gateways, route tables, subnets, NSGs
     object-storage/   S3-compatible Object Storage buckets
     kubernetes/       OKE cluster and optional node pool
-    postgresql/       OCI PostgreSQL database system
+    managed-postgresql/
+                      OCI Database with PostgreSQL managed DB systems
   environments/
     dev/              Riyadh and Jeddah development environment
+    postgresql/       Strapi OCI Database with PostgreSQL DB systems
 ```
 
 ## Regions
@@ -40,4 +42,9 @@ terraform init
 terraform plan
 ```
 
-By default, OKE node pools, PostgreSQL, and OCI Service Gateways are disabled in the example variables to avoid provisioning compute/database capacity and to allow the sample plan to run without regional OCI service metadata lookups. Set `create_service_gateway = true`, `create_node_pool = true`, and `postgresql.enabled = true` when those resources are ready to be provisioned with real OCI credentials.
+By default, OKE node pools, OCI Database with PostgreSQL, and OCI Service
+Gateways are disabled in the example variables to avoid provisioning
+compute/database capacity and to allow the sample plan to run without regional
+OCI service metadata lookups. Set `create_service_gateway = true`,
+`create_node_pool = true`, and `postgresql.enabled = true` when those resources
+are ready to be provisioned with real OCI credentials.

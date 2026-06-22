@@ -8,7 +8,7 @@ output "riyadh" {
     object_namespace = module.object_storage_riyadh.namespace
     oke_cluster_id   = module.kubernetes_riyadh.cluster_id
     oke_node_pool_id = module.kubernetes_riyadh.node_pool_id
-    postgresql_id    = module.postgresql_riyadh.db_system_id
+    postgresql_id    = try(module.postgresql_riyadh.db_system_ids[var.environment], null)
   }
 }
 
@@ -22,6 +22,6 @@ output "jeddah" {
     object_namespace = module.object_storage_jeddah.namespace
     oke_cluster_id   = module.kubernetes_jeddah.cluster_id
     oke_node_pool_id = module.kubernetes_jeddah.node_pool_id
-    postgresql_id    = module.postgresql_jeddah.db_system_id
+    postgresql_id    = try(module.postgresql_jeddah.db_system_ids[var.environment], null)
   }
 }
