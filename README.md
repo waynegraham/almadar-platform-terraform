@@ -74,7 +74,7 @@ tests/validation/            Deployment validation tests
 For local application development:
 
 - Docker Desktop or compatible Docker Engine,
-- Docker Compose v2,
+- Docker Compose v3,
 - Node.js 20 or newer,
 - npm.
 
