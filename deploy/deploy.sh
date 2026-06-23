@@ -20,6 +20,8 @@ docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" pull
 
 docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --remove-orphans
 
+docker image prune -f
+
 echo "Waiting for services to report healthy..."
 for service in strapi cantaloupe frontend proxy; do
   container="almadar-${service}"

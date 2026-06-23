@@ -1,0 +1,156 @@
+name: deploy-prod
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/frontend/**"
+      - "apps/strapi/**"
+      - "deploy/**"
+      - ".github/workflows/deploy-prod.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "22"
+  DEPLOY_ENVIRONMENT: prod
+
+jobs:
+  build-and-deploy:
+    name: Build images and deploy production
+    runs-on: [self-hosted, oci, almadar, prod]
+    environment: production
+    env:
+      CONTAINER_REGISTRY: ${{ vars.CONTAINER_REGISTRY || 'ghcr.io' }}
+      CONTAINER_NAMESPACE: ${{ vars.CONTAINER_NAMESPACE || github.repository_owner }}
+      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+      APP_VM_HOST: ${{ secrets.APP_VM_HOST }}
+      APP_VM_USER: ${{ vars.APP_VM_USER || 'opc' }}
+      APP_DEPLOY_PATH: ${{ vars.APP_DEPLOY_PATH || '/opt/almadar/deploy' }}
+      APP_ENV_FILE: ${{ vars.APP_ENV_FILE || '.env.prod' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Check frontend
+        working-directory: apps/frontend
+        run: |
+          npm ci
+          npm run lint
+          npm test
+          npm run build
+
+      - name: Check Strapi
+        working-directory: apps/strapi
+        run: |
+          npm ci
+          npm test
+
+      - name: Resolve image names
+        id: images
+        shell: bash
+        run: |
+          registry="${CONTAINER_REGISTRY}"
+          namespace="${CONTAINER_NAMESPACE}"
+          if [[ "${registry}" == "ghcr.io" ]]; then
+            namespace="${namespace,,}"
+          fi
+          tag="${DEPLOY_ENVIRONMENT}-${GITHUB_SHA}"
+
+          echo "frontend_image=${registry}/${namespace}/almadar-frontend" >> "$GITHUB_OUTPUT"
+          echo "strapi_image=${registry}/${namespace}/almadar-strapi" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to container registry
+        run: |
+          printf '%s' "${REGISTRY_PASSWORD}" | docker login "${CONTAINER_REGISTRY}" \
+            --username "${REGISTRY_USERNAME}" \
+            --password-stdin
+
+      - name: Build and push frontend image
+        run: |
+          docker build \
+            --file apps/frontend/Dockerfile \
+            --tag "${{ steps.images.outputs.frontend_image }}:${{ steps.images.outputs.tag }}" \
+            --tag "${{ steps.images.outputs.frontend_image }}:${DEPLOY_ENVIRONMENT}-latest" \
+            apps/frontend
+          docker push "${{ steps.images.outputs.frontend_image }}:${{ steps.images.outputs.tag }}"
+          docker push "${{ steps.images.outputs.frontend_image }}:${DEPLOY_ENVIRONMENT}-latest"
+
+      - name: Build and push Strapi image
+        run: |
+          docker build \
+            --file apps/strapi/Dockerfile \
+            --tag "${{ steps.images.outputs.strapi_image }}:${{ steps.images.outputs.tag }}" \
+            --tag "${{ steps.images.outputs.strapi_image }}:${DEPLOY_ENVIRONMENT}-latest" \
+            apps/strapi
+          docker push "${{ steps.images.outputs.strapi_image }}:${{ steps.images.outputs.tag }}"
+          docker push "${{ steps.images.outputs.strapi_image }}:${DEPLOY_ENVIRONMENT}-latest"
+
+      - name: Configure SSH
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.APP_VM_SSH_PRIVATE_KEY }}" > ~/.ssh/almadar_app_vm
+          chmod 600 ~/.ssh/almadar_app_vm
+          ssh-keyscan -H "${APP_VM_HOST}" >> ~/.ssh/known_hosts
+
+      - name: Copy deployment bundle
+        run: |
+          tar -C deploy -czf /tmp/almadar-deploy.tar.gz compose.prod.yml Caddyfile deploy.sh backup.sh README.md
+          ssh -i ~/.ssh/almadar_app_vm "${APP_VM_USER}@${APP_VM_HOST}" "mkdir -p '${APP_DEPLOY_PATH}'"
+          scp -i ~/.ssh/almadar_app_vm /tmp/almadar-deploy.tar.gz "${APP_VM_USER}@${APP_VM_HOST}:/tmp/almadar-deploy.tar.gz"
+          ssh -i ~/.ssh/almadar_app_vm "${APP_VM_USER}@${APP_VM_HOST}" "tar -xzf /tmp/almadar-deploy.tar.gz -C '${APP_DEPLOY_PATH}' && chmod +x '${APP_DEPLOY_PATH}/deploy.sh' '${APP_DEPLOY_PATH}/backup.sh'"
+
+      - name: Deploy on app VM
+        env:
+          FRONTEND_IMAGE: ${{ steps.images.outputs.frontend_image }}
+          STRAPI_IMAGE: ${{ steps.images.outputs.strapi_image }}
+          IMAGE_TAG: ${{ steps.images.outputs.tag }}
+        run: |
+          printf '%s' "${REGISTRY_PASSWORD}" | ssh -i ~/.ssh/almadar_app_vm "${APP_VM_USER}@${APP_VM_HOST}" \
+            "docker login '${CONTAINER_REGISTRY}' --username '${REGISTRY_USERNAME}' --password-stdin"
+
+          ssh -i ~/.ssh/almadar_app_vm "${APP_VM_USER}@${APP_VM_HOST}" \
+            "APP_DEPLOY_PATH='${APP_DEPLOY_PATH}' APP_ENV_FILE='${APP_ENV_FILE}' FRONTEND_IMAGE='${FRONTEND_IMAGE}' STRAPI_IMAGE='${STRAPI_IMAGE}' IMAGE_TAG='${IMAGE_TAG}' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "${APP_DEPLOY_PATH}"
+
+          if [[ ! -f "${APP_ENV_FILE}" ]]; then
+            echo "Missing ${APP_DEPLOY_PATH}/${APP_ENV_FILE}. Create it from .env.prod.example before deploying." >&2
+            exit 1
+          fi
+
+          set_env() {
+            key="$1"
+            value="$2"
+            if grep -q "^${key}=" "${APP_ENV_FILE}"; then
+              sed -i "s|^${key}=.*|${key}=${value}|" "${APP_ENV_FILE}"
+            else
+              printf '\n%s=%s\n' "${key}" "${value}" >> "${APP_ENV_FILE}"
+            fi
+          }
+
+          set_env FRONTEND_IMAGE "${FRONTEND_IMAGE}"
+          set_env FRONTEND_TAG "${IMAGE_TAG}"
+          set_env STRAPI_IMAGE "${STRAPI_IMAGE}"
+          set_env STRAPI_TAG "${IMAGE_TAG}"
+
+          ALMADAR_ENV_FILE="${APP_ENV_FILE}" docker compose --env-file "${APP_ENV_FILE}" -f compose.prod.yml pull
+          ALMADAR_ENV_FILE="${APP_ENV_FILE}" docker compose --env-file "${APP_ENV_FILE}" -f compose.prod.yml up -d
+          docker image prune -f
+          REMOTE
