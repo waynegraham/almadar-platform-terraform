@@ -1,0 +1,64 @@
+{
+	email {$CADDY_EMAIL}
+}
+
+(common_headers) {
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}
+
+(strapi_proxy) {
+	reverse_proxy strapi:1337
+}
+
+(iiif_proxy) {
+	reverse_proxy cantaloupe:8182
+}
+
+{$PUBLIC_SITE_HOST} {
+	import common_headers
+
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	handle_path /cms/* {
+		import strapi_proxy
+	}
+
+	handle_path /iiif/* {
+		import iiif_proxy
+	}
+
+	handle {
+		reverse_proxy frontend:3000
+	}
+}
+
+{$CMS_SITE_HOST} {
+	import common_headers
+
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	handle {
+		import strapi_proxy
+	}
+}
+
+{$IIIF_SITE_HOST} {
+	import common_headers
+
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	handle {
+		import iiif_proxy
+	}
+}
+

@@ -1,0 +1,123 @@
+name: almadar-prod
+
+services:
+  proxy:
+    image: caddy:2.8-alpine
+    container_name: almadar-proxy
+    restart: unless-stopped
+    depends_on:
+      frontend:
+        condition: service_healthy
+      strapi:
+        condition: service_healthy
+      cantaloupe:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      PUBLIC_SITE_HOST: ${PUBLIC_SITE_HOST}
+      CMS_SITE_HOST: ${CMS_SITE_HOST:-}
+      IIIF_SITE_HOST: ${IIIF_SITE_HOST:-}
+      CADDY_EMAIL: ${CADDY_EMAIL:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --header=\"Host: $${PUBLIC_SITE_HOST}\" --spider http://127.0.0.1/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - almadar
+
+  frontend:
+    image: ${FRONTEND_IMAGE}:${FRONTEND_TAG}
+    container_name: almadar-frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+      FRONTEND_PORT: 3000
+      NEXT_PUBLIC_STRAPI_URL: ${FRONTEND_PUBLIC_STRAPI_URL}
+      NEXT_PUBLIC_IIIF_URL: ${FRONTEND_PUBLIC_IIIF_URL}
+      STRAPI_INTERNAL_URL: http://strapi:1337
+    expose:
+      - "3000"
+    depends_on:
+      strapi:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - node -e "const net=require('node:net');const s=net.connect(3000,'127.0.0.1',()=>process.exit(0));s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),3000);"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - almadar
+
+  strapi:
+    image: ${STRAPI_IMAGE}:${STRAPI_TAG}
+    container_name: almadar-strapi
+    restart: unless-stopped
+    env_file:
+      - ${ALMADAR_ENV_FILE:-./.env.prod}
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 1337
+      DATABASE_CLIENT: postgres
+      DATABASE_SSL: ${DATABASE_SSL:-true}
+      DATABASE_SSL_REJECT_UNAUTHORIZED: ${DATABASE_SSL_REJECT_UNAUTHORIZED:-false}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
+      S3_ROOT_PATH: ${S3_ROOT_PATH:-uploads}
+      S3_SIGNED_URL_EXPIRES: ${S3_SIGNED_URL_EXPIRES:-900}
+    expose:
+      - "1337"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - node -e "const net=require('node:net');const s=net.connect(1337,'127.0.0.1',()=>process.exit(0));s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),3000);"
+      interval: 30s
+      timeout: 5s
+      retries: 8
+      start_period: 90s
+    networks:
+      - almadar
+
+  cantaloupe:
+    image: ${CANTALOUPE_IMAGE:-uclalibrary/cantaloupe:5.0.7-0}
+    container_name: almadar-cantaloupe
+    platform: ${CANTALOUPE_PLATFORM:-linux/amd64}
+    restart: unless-stopped
+    env_file:
+      - ${ALMADAR_ENV_FILE:-./.env.prod}
+    environment:
+      CONFIG_FILE: /tmp/cantaloupe.properties
+      CANTALOUPE_FILESYSTEMCACHE_PATHNAME: /var/cache/cantaloupe
+    expose:
+      - "8182"
+    volumes:
+      - ../infrastructure/cantaloupe/cantaloupe.properties:/etc/cantaloupe/cantaloupe.properties.tmpl:ro
+      - ${CANTALOUPE_CACHE_PATH:-/var/lib/almadar/cantaloupe-cache}:/var/cache/cantaloupe
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8182/ || curl -fsS http://127.0.0.1:8182/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 8
+      start_period: 60s
+    networks:
+      - almadar
+
+networks:
+  almadar:
+    name: almadar-prod
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:
