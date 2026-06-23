@@ -97,13 +97,13 @@ spec:
               name: http
           readinessProbe:
             httpGet:
-              path: /
+              path: /health
               port: 8182
             initialDelaySeconds: 20
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /
+              path: /health
               port: 8182
             initialDelaySeconds: 60
             periodSeconds: 20
@@ -120,4 +120,3 @@ spec:
         - name: cantaloupe-cache
           persistentVolumeClaim:
             claimName: cantaloupe-cache
-

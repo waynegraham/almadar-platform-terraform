@@ -72,7 +72,7 @@ initContainers:
 
 readinessProbe:
   httpGet:
-    path: /
+    path: /health
     port: http
   initialDelaySeconds: 20
   periodSeconds: 10
@@ -81,7 +81,7 @@ readinessProbe:
 
 livenessProbe:
   httpGet:
-    path: /
+    path: /health
     port: http
   initialDelaySeconds: 60
   periodSeconds: 30

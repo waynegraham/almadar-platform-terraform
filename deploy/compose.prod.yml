@@ -105,7 +105,7 @@ services:
       - ../infrastructure/cantaloupe/cantaloupe.properties:/etc/cantaloupe/cantaloupe.properties.tmpl:ro
       - ${CANTALOUPE_CACHE_PATH:-/var/lib/almadar/cantaloupe-cache}:/var/cache/cantaloupe
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8182/ || curl -fsS http://127.0.0.1:8182/ || exit 1"]
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8182/health || curl -fsS http://127.0.0.1:8182/health || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 8
