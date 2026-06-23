@@ -1,5 +1,10 @@
 # Disaster Recovery Runbook
 
+Note: The August 1, 2026 launch plan defers Actions Runner Controller. Recovery
+should not assume ARC is available. Use the manual Helm deployment flow in
+`docs/production-deployment-plan.md` unless ARC is explicitly reintroduced after
+launch.
+
 This runbook describes how to rebuild the AlMadar platform from source control
 and backups. It assumes the engineer performing recovery has no prior project
 context beyond this repository, access to the approved secret store, and

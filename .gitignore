@@ -60,6 +60,8 @@ override.tf.json
 *_override.tf.json
 .terraform.lock.hcl
 !infrastructure/terraform/environments/**/.terraform.lock.hcl
+!infrastructure/terraform/future/environments/**/.terraform.lock.hcl
+!infrastructure/terraform/simple/.terraform.lock.hcl
 
 # Kubernetes and Helm generated files
 *.kubeconfig

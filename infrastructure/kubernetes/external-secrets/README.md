@@ -2,9 +2,12 @@
 
 These manifests configure External Secrets Operator to read JSON secret payloads
 from OCI Vault and create the `almadar-secrets` Kubernetes Secret in the `dev`,
-`test`, and `prod` namespaces. The same ClusterSecretStore is also used by the
-Actions Runner Controller manifests to create `arc-github-app` in the
-`arc-runners` namespace.
+`test`, and `prod` namespaces.
+
+Actions Runner Controller is deferred from the August 1, 2026 production launch.
+If ARC is reintroduced after launch, the same ClusterSecretStore can also be
+used by the ARC manifests to create `arc-github-app` in the `arc-runners`
+namespace.
 
 The Strapi and Cantaloupe Helm charts already reference `almadar-secrets`, so no
 secret values need to be stored in Helm values files or Kubernetes manifests.
@@ -55,7 +58,8 @@ kubectl -n dev get secret almadar-secrets
 
 Repeat for `test` and `prod`.
 
-The GitHub Actions runner secret is verified separately after applying:
+If ARC is reintroduced, the GitHub Actions runner secret is verified separately
+after applying:
 
 ```bash
 kubectl apply -k infrastructure/kubernetes/actions-runner-controller

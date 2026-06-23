@@ -8,6 +8,8 @@ For recommended OCI server sizing and cost-bearing infrastructure, see
 [docs/oci-sizing-report.md](docs/oci-sizing-report.md).
 For simplification options and easier deployment paths, see
 [docs/simplification-report.md](docs/simplification-report.md).
+For the selected August 1 production deployment plan, see
+[docs/production-deployment-plan.md](docs/production-deployment-plan.md).
 
 ## What Runs Locally
 
@@ -39,13 +41,18 @@ infrastructure/
   minio/                     MinIO bucket initialization
   postgresql/                PostgreSQL initialization
   terraform/                 Terraform infrastructure
-  kubernetes/                Shared Kubernetes manifests
-  helm/                      Helm charts and values
-  k3d/                       Local Kubernetes assets
+  kubernetes/                Deferred Kubernetes manifests
+  helm/                      Deferred Helm charts and values
+  k3d/                       Local Kubernetes assets, deferred for launch
 
 docs/                        Project documentation
 .github/workflows/           GitHub Actions workflows
 ```
+
+The August 1 production launch uses a self-hosted GitHub Actions runner on an
+OCI VM to build immutable frontend and Strapi images, push them to OCIR, and
+deploy them to a separate OCI application VM with Docker Compose as documented
+in `docs/production-deployment-plan.md`.
 
 ## Prerequisites
 
@@ -60,7 +67,7 @@ Optional for infrastructure work:
 - kubectl
 - Helm
 - k3d
-- OCI account credentials with permission to manage networking, OKE, Object Storage, PostgreSQL, Vault, KMS, and IAM policies
+- OCI account credentials with permission to manage networking, Compute, Object Storage, PostgreSQL, Vault, KMS, and IAM policies
 
 ## Quick Start
 
@@ -104,7 +111,9 @@ For real work, change secrets in `.env`. Do not commit `.env`.
 
 Use Docker Compose for day-to-day application development. It is the quickest path for running the frontend, Strapi, PostgreSQL, MinIO, and Cantaloupe together with local source mounts.
 
-Use k3d when validating Kubernetes manifests or cluster behavior. The k3d environment binds the same local ports as Docker Compose, so stop Compose first:
+Kubernetes, k3d, and Helm are deferred from the August 1 production launch.
+Keep them only for experiments or future migration validation. The k3d
+environment binds the same local ports as Docker Compose, so stop Compose first:
 
 ```bash
 docker compose down
@@ -118,7 +127,9 @@ Delete the k3d cluster when finished:
 ./infrastructure/k3d/delete.sh
 ```
 
-Use Helm when validating deployable application packaging. Charts live under `infrastructure/helm/` and have separate values overlays for `dev`, `test`, and `prod`.
+Use Helm only when validating the deferred Kubernetes packaging. Charts live
+under `infrastructure/helm/` and have separate values overlays for `dev`,
+`test`, and `prod`.
 
 ```bash
 helm lint infrastructure/helm/frontend
@@ -139,7 +150,8 @@ helm template almadar-dev-frontend infrastructure/helm/frontend \
   --namespace dev
 ```
 
-The `dev` values are intended for local development. The `prod` values assume a production image or deployment pipeline provides application code and production secrets.
+The Helm `prod` values are retained as deferred Kubernetes references. They are
+not the August 1 production deployment path.
 
 ## OCI Infrastructure
 
@@ -148,19 +160,22 @@ Production infrastructure is managed with Terraform under `infrastructure/terraf
 ```text
 infrastructure/terraform/
   modules/
+    compute-vm/              Planned VM module for app and runner hosts
     network/
     object-storage/
-    kubernetes/
-    kubernetes-rbac/
+    kubernetes/              Deferred
+    kubernetes-rbac/         Deferred
     managed-postgresql/
     vault-secrets/
   environments/
-    network/
-    object-storage/
-    postgresql/
-    oke/
-    oke-rbac/
-    vault/
+    prod/                    Planned launch stack
+    nonprod/                 Planned shared non-production stack
+    network/                 Existing split stack
+    object-storage/          Existing split stack
+    postgresql/              Existing split stack
+    oke/                     Deferred
+    oke-rbac/                Deferred
+    vault/                   Existing split stack
 ```
 
 The OCI regions currently targeted are:
@@ -173,15 +188,12 @@ Recommended provisioning order:
 1. Network: `infrastructure/terraform/environments/network`
 2. Object Storage: `infrastructure/terraform/environments/object-storage`
 3. OCI Database with PostgreSQL: `infrastructure/terraform/environments/postgresql`
-4. OKE: `infrastructure/terraform/environments/oke`
-5. OKE namespaces and RBAC: `infrastructure/terraform/environments/oke-rbac`
-6. Vault secrets: `infrastructure/terraform/environments/vault`
-7. External Secrets manifests: `infrastructure/kubernetes/external-secrets`
-8. GitHub Actions OCI runners: `docs/github-actions-runners.md`
-9. Strapi CI/CD workflow: `docs/github-actions-strapi.md`
-10. Disaster recovery runbook: `docs/runbooks/disaster-recovery.md`
-11. Pre-implementation architecture review: `docs/architecture-review.md`
-12. Architectural decision records: `docs/adr/`
+4. Application VM and runner VM: planned `compute-vm` Terraform module
+5. Vault secrets: `infrastructure/terraform/environments/vault`
+6. Production deployment plan: `docs/production-deployment-plan.md`
+7. Disaster recovery runbook: `docs/runbooks/disaster-recovery.md`
+8. Pre-implementation architecture review: `docs/architecture-review.md`
+9. Architectural decision records: `docs/adr/`
 
 Each Terraform environment includes a README and a `terraform.tfvars.example`.
 Copy the example to `terraform.tfvars`, fill in real OCI values locally, then run:
@@ -192,12 +204,14 @@ terraform plan
 terraform apply
 ```
 
-Do not commit `terraform.tfvars` or generated kubeconfig files.
+Do not commit `terraform.tfvars`, generated SSH private keys, production env
+files, or generated kubeconfig files from deferred Kubernetes experiments.
 
 ## Secrets
 
-Application secrets are stored in OCI Vault and synchronized into Kubernetes by
-External Secrets Operator. Secret values are not stored in Git.
+Application secrets are stored in OCI Vault or injected into the production
+Compose environment by the documented deployment process. Secret values are not
+stored in Git.
 
 OCI Vault stores per-environment JSON payloads for:
 
@@ -206,24 +220,9 @@ OCI Vault stores per-environment JSON payloads for:
 - Strapi secrets
 - S3-compatible Object Storage credentials
 
-OCI Vault also stores the GitHub App credentials used by Actions Runner
-Controller to register ephemeral organization runners.
-
-External Secrets creates an `almadar-secrets` Kubernetes Secret in each
-application namespace:
-
-- `dev`
-- `test`
-- `prod`
-
-The Strapi and Cantaloupe Helm charts already read from `almadar-secrets`.
-
-Apply the External Secrets manifests after OKE, namespaces, Vault, and IAM
-policy configuration are in place:
-
-```bash
-kubectl apply -k infrastructure/kubernetes/external-secrets
-```
+Actions Runner Controller and External Secrets Operator are deferred with
+Kubernetes. The launch runner is a standalone OCI VM registered with GitHub as a
+self-hosted runner.
 
 Terraform state for the Vault stack contains secret payloads because Terraform
 manages OCI Vault secret versions. Use an encrypted remote backend for shared

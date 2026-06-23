@@ -1,4 +1,4 @@
-name: Strapi CI and image build
+name: Frontend CI and image build
 
 on:
   push:
@@ -7,10 +7,9 @@ on:
       - main
       - "release/**"
     paths:
-      - "apps/strapi/**"
-      - "infrastructure/helm/strapi/**"
-      - "tests/validation/**"
-      - ".github/workflows/strapi.yml"
+      - "apps/frontend/**"
+      - "infrastructure/helm/frontend/**"
+      - ".github/workflows/frontend.yml"
   workflow_dispatch:
     inputs:
       environment:
@@ -28,7 +27,7 @@ permissions:
 
 env:
   NODE_VERSION: "22"
-  IMAGE_NAME: almadar-strapi
+  IMAGE_NAME: almadar-frontend
 
 jobs:
   ci:
@@ -36,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: apps/strapi
+        working-directory: apps/frontend
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -46,13 +45,19 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-          cache-dependency-path: apps/strapi/package-lock.json
+          cache-dependency-path: apps/frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
+      - name: Run lint
+        run: npm run lint
+
       - name: Run tests
         run: npm test
+
+      - name: Build
+        run: npm run build
 
   build:
     name: Build and push image
@@ -99,8 +104,8 @@ jobs:
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
-          context: apps/strapi
-          file: apps/strapi/Dockerfile
+          context: apps/frontend
+          file: apps/frontend/Dockerfile
           push: true
           tags: |
             ${{ steps.image.outputs.image }}:${{ steps.image.outputs.tag }}

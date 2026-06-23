@@ -1,39 +1,49 @@
 # OCI Terraform
 
-Terraform for the Almadar platform on Oracle Cloud Infrastructure.
+Terraform for the AlMadar platform on Oracle Cloud Infrastructure.
 
-## Layout
+## Active Launch Path
+
+Use the simplified August 1 launch stack:
 
 ```text
-infrastructure/terraform/
-  modules/
-    network/          VCN, gateways, route tables, subnets, NSGs
-    object-storage/   S3-compatible Object Storage buckets
-    kubernetes/       OKE cluster and optional node pool
-    managed-postgresql/
-                      OCI Database with PostgreSQL managed DB systems
-  environments/
-    dev/              Riyadh and Jeddah development environment
-    postgresql/       Strapi OCI Database with PostgreSQL DB systems
+infrastructure/terraform/simple/
 ```
 
-## Regions
+This root provisions the VM + Docker Compose launch architecture:
 
-The environment is wired for:
+- VCN, subnets, security lists, and NSGs,
+- app server VM,
+- GitHub self-hosted runner VM,
+- OCI Database with PostgreSQL,
+- Object Storage buckets for Strapi uploads, IIIF source images, and backups,
+- optional OCI Vault secrets,
+- outputs for deployment and operations.
 
-- Riyadh: `me-riyadh-1`
-- Jeddah: `me-jeddah-1`
+## Preserved Future Terraform
+
+The previous multi-environment and Kubernetes-oriented Terraform has been moved
+under:
+
+```text
+infrastructure/terraform/future/
+```
+
+Use `future/` only as a reference for deferred OKE, Kubernetes RBAC, split
+environment stacks, or post-launch expansion work. It is not part of the
+August 1 launch path.
 
 ## Usage
 
 Create local variables:
 
 ```bash
-cd infrastructure/terraform/environments/dev
+cd infrastructure/terraform/simple
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Edit `terraform.tfvars` with OCI tenancy, user, fingerprint, key path, compartment, Object Storage namespace, and SSH key values.
+Edit `terraform.tfvars` with real OCI tenancy, user, fingerprint, key path,
+compartment, SSH key, PostgreSQL password, and network allowlist values.
 
 Initialize and plan:
 
@@ -42,9 +52,11 @@ terraform init
 terraform plan
 ```
 
-By default, OKE node pools, OCI Database with PostgreSQL, and OCI Service
-Gateways are disabled in the example variables to avoid provisioning
-compute/database capacity and to allow the sample plan to run without regional
-OCI service metadata lookups. Set `create_service_gateway = true`,
-`create_node_pool = true`, and `postgresql.enabled = true` when those resources
-are ready to be provisioned with real OCI credentials.
+Apply after review:
+
+```bash
+terraform apply
+```
+
+Do not commit `terraform.tfvars`, OCI private keys, generated SSH private keys,
+or Terraform state files.

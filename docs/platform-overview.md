@@ -1,27 +1,30 @@
 # Platform Overview
 
-The AlMadar platform is designed so the website, CMS, image delivery system,
+The AlMadar platform is designed so the website, CMS, media delivery system,
 cloud infrastructure, deployment pipeline, and operating procedures can be
 rebuilt from source control. This is deployment as code: instead of relying on
 manual setup in cloud dashboards, the repository records how infrastructure is
-created, how applications are packaged, how secrets are delivered, and how each
-environment should be deployed.
+created, how applications are packaged, how secrets are delivered, and how the
+production environment should be deployed.
 
 For non-technical administrators, this means the platform is documented as a
 repeatable operating system for the organization. The public website presents
 collection content to visitors. Strapi gives staff an administrative interface
-for managing editorial and collection data. Cantaloupe delivers approximately
-100 GB of high-resolution production IIIF source images from object storage.
-OCI Database with PostgreSQL, Oracle's managed PostgreSQL service, stores CMS
-data. Cloudflare provides the public DNS, TLS, CDN, and security edge. Oracle
-Cloud Infrastructure hosts the production Kubernetes cluster, managed database,
-object storage, and secret vault.
+for managing editorial and collection data. Cantaloupe delivers IIIF images from
+object storage. OCI Database with PostgreSQL stores CMS data. OCI Object Storage
+stores Strapi uploads, IIIF source images, video, and audio. Cloudflare provides
+the public DNS, TLS, CDN, and security edge.
 
-The same general architecture is used locally and in production. Developers run
-PostgreSQL, MinIO, Strapi, Next.js, and Cantaloupe with Docker Compose. In
-production, Terraform provisions OCI resources, Helm deploys applications to
-Kubernetes, External Secrets Operator copies approved secrets from OCI Vault
-into the cluster, and GitHub Actions builds and deploys application changes.
+For the August 1, 2026 production launch, Oracle Cloud Infrastructure hosts:
+
+- one application VM running Docker Compose,
+- one separate self-hosted GitHub Actions runner VM,
+- managed PostgreSQL,
+- Object Storage,
+- Vault or equivalent secret source-of-truth configuration.
+
+Kubernetes/OKE, Helm, External Secrets Operator, and Actions Runner Controller
+are deferred from the launch architecture.
 
 ## Current Infrastructure Chart
 
@@ -32,8 +35,9 @@ flowchart TB
   engineers["Engineers"]
 
   github["GitHub repository and Actions"]
+  runner["OCI runner VM\nself-hosted GitHub Actions"]
   terraform["Terraform\nOCI infrastructure as code"]
-  helm["Helm charts\napplication deployment as code"]
+  ocir["OCIR\nimmutable container images"]
   cloudflare["Cloudflare\nDNS, TLS, CDN, WAF, Access"]
 
   subgraph local["Local development"]
@@ -47,46 +51,43 @@ flowchart TB
 
   subgraph oci["Oracle Cloud Infrastructure"]
     vcn["VCN, subnets, gateways, NSGs"]
-    objectStorage["OCI Object Storage\nstrapi-* and iiif-* buckets\n~100 GB production IIIF sources"]
+    appVm["Application VM\nDocker Compose"]
+    proxy["Caddy or nginx"]
+    frontend["Next.js container"]
+    strapi["Strapi container"]
+    cantaloupe["Cantaloupe container"]
+    objectStorage["OCI Object Storage\nStrapi uploads, IIIF sources,\nvideo, audio"]
     postgres["OCI Database with PostgreSQL\nmanaged service"]
-    vault["OCI Vault and KMS"]
-
-    subgraph oke["OKE Kubernetes cluster"]
-      namespaces["dev, test, prod namespaces"]
-      frontend["Next.js pods"]
-      strapi["Strapi pods"]
-      cantaloupe["Cantaloupe pods"]
-      eso["External Secrets Operator"]
-      arc["Actions Runner Controller"]
-      services["Kubernetes Services / OCI Load Balancer"]
-    end
+    vault["OCI Vault / secret source"]
+    cache["Local VM disk\nDocker data, logs,\nCantaloupe cache only"]
   end
 
-  visitors --> cloudflare --> services
-  editors --> cloudflare
-  services --> frontend
-  services --> strapi
-  services --> cantaloupe
+  visitors --> cloudflare --> proxy
+  editors --> cloudflare --> proxy
+  proxy --> frontend
+  proxy --> strapi
+  proxy --> cantaloupe
 
   engineers --> github
-  github --> arc
-  github --> terraform
-  github --> helm
+  github --> runner
+  runner --> ocir
+  runner --> appVm
   terraform --> vcn
+  terraform --> appVm
+  terraform --> runner
   terraform --> objectStorage
   terraform --> postgres
   terraform --> vault
-  terraform --> oke
-  helm --> frontend
-  helm --> strapi
-  helm --> cantaloupe
 
-  eso --> vault
-  eso --> namespaces
+  appVm --> proxy
+  appVm --> frontend
+  appVm --> strapi
+  appVm --> cantaloupe
+  appVm --> cache
+  frontend --> strapi
   strapi --> postgres
   strapi --> objectStorage
   cantaloupe --> objectStorage
-  frontend --> strapi
 
   compose --> localFrontend
   compose --> localStrapi
@@ -99,7 +100,7 @@ flowchart TB
   localCantaloupe --> minio
 ```
 
-## Guide for Administrators
+## Guide For Administrators
 
 The platform has four main user-facing responsibilities:
 
@@ -115,56 +116,50 @@ The platform has four main user-facing responsibilities:
 The repository is the source of truth for how these responsibilities are
 implemented. When the team changes infrastructure, deployment behavior, or
 operating procedures, the change should be reflected here. This reduces the risk
-that knowledge exists only in one engineer's memory or in a cloud dashboard that
-future staff cannot reconstruct.
+that knowledge exists only in one engineer's memory or in a cloud dashboard
+that future staff cannot reconstruct.
 
-The production platform is organized into `dev`, `test`, and `prod`
-environments. These environments share one Kubernetes cluster for cost control,
-but they are separated by namespaces, configuration values, secrets, and release
-workflow. Promotion should follow the branch strategy documented in this
-repository: `develop` for development, `release/*` for test, and `main` for
-production.
+For launch, production should stay intentionally small: one app VM, one runner
+VM, managed PostgreSQL, Object Storage, and Cloudflare. The local development
+environment mirrors the same application shape with Docker Compose, replacing
+managed PostgreSQL and Object Storage with local PostgreSQL and MinIO.
 
-## Technical Overview for IT Professionals
+## Technical Overview For IT Professionals
 
 The platform is built around stateless application containers and managed data
-services. Next.js, Strapi, and Cantaloupe run as Kubernetes workloads in OKE.
-Production PostgreSQL data lives in OCI Database with PostgreSQL, Oracle's
-managed PostgreSQL service, rather than in Kubernetes or on self-managed
-compute. Media and approximately 100 GB of production IIIF source images live
-in OCI Object Storage buckets. Application pods should be replaceable at any
-time without losing durable data.
+services. Next.js, Strapi, and Cantaloupe run as containers on a Docker Compose
+application VM. Production PostgreSQL data lives in OCI Database with
+PostgreSQL, Oracle's managed PostgreSQL service, rather than on the VM. Media
+and source assets live in OCI Object Storage buckets. Application containers and
+the app VM should be replaceable without losing durable data.
 
-Terraform under `infrastructure/terraform/` defines the OCI foundation:
+Terraform under `infrastructure/terraform/` defines or should define the OCI
+foundation:
 
 - `network` creates the VCN, subnets, gateways, route tables, and NSGs.
-- `object-storage` creates S3-compatible buckets for Strapi media and IIIF
-  images.
-- `postgresql` creates OCI Database with PostgreSQL managed DB systems through
-  the `managed-postgresql` Terraform module.
-- `oke` creates the single OKE cluster and managed node pool.
-- `oke-rbac` creates Kubernetes namespaces and access boundaries.
-- `vault` creates Vault/KMS resources and secret payloads.
+- `object-storage` creates S3-compatible buckets for Strapi media, IIIF images,
+  video, and audio.
+- `managed-postgresql` creates OCI Database with PostgreSQL resources.
+- `compute-vm` should create the application VM and runner VM.
+- `vault-secrets` creates Vault/KMS resources and secret payloads if Vault is
+  used as the secret source of truth.
 
-Helm charts under `infrastructure/helm/` define the deployable applications:
+Deployment assets should live under `deploy/`:
 
-- `frontend` deploys the Next.js public website.
-- `strapi` deploys the CMS and its migration job.
-- `cantaloupe` deploys the IIIF image server.
-- `actions-runner-controller` values support self-hosted GitHub Actions runners
-  inside OKE.
+- `deploy/compose` defines the production Docker Compose runtime, proxy config,
+  systemd service, and deployment scripts.
+- `deploy/runner` defines the self-hosted GitHub Actions runner VM setup.
 
-Secrets are not stored in Helm values files or committed environment files.
-OCI Vault stores the approved secret payloads. External Secrets Operator reads
-from Vault and creates the `almadar-secrets` Kubernetes Secret in the `dev`,
-`test`, and `prod` namespaces. The same pattern is used for GitHub App
-credentials needed by Actions Runner Controller.
+Secrets are not stored in committed environment files. Production Compose should
+receive secrets through a documented deployment process, backed by OCI Vault,
+GitHub environment secrets, or runner-local secret material with rotation
+procedures.
 
-Cloudflare fronts the public services and should point to OCI load balancer
-origins rather than directly to pods or worker nodes. Its responsibilities are
-DNS, TLS, CDN caching, WAF protections, and administrative access controls.
-Cloudflare behavior is documented in `docs/cloudflare.md`; OCI and Kubernetes
-remain the infrastructure source of truth.
+Cloudflare fronts the public services and should point to the application VM
+proxy origin. Its responsibilities are DNS, TLS, CDN caching, WAF protections,
+and administrative access controls. Cloudflare behavior is documented in
+`docs/cloudflare.md`; OCI and this repository remain the infrastructure source
+of truth.
 
 The local development environment mirrors production concepts with lower-cost
 substitutes. Docker Compose runs Next.js, Strapi, PostgreSQL, MinIO, and

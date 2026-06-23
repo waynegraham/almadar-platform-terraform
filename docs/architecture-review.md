@@ -2,6 +2,10 @@
 
 Date: 2026-06-21
 
+Updated: 2026-06-23 to reflect the August 1 launch decision to defer Actions
+Runner Controller and use GitHub-hosted image builds plus manual Helm deployment
+from an approved workstation or OCI Cloud Shell.
+
 Status: Recommended actions before production implementation
 
 ## Scope
@@ -14,7 +18,7 @@ This review covers the proposed OCI architecture for:
 - OCI Object Storage
 - OCI Database with PostgreSQL managed service
 - Cloudflare
-- GitHub Actions Runner Controller
+- GitHub Actions image builds, with Actions Runner Controller deferred
 
 The assumptions are a small cultural heritage team, limited DevOps staff, a
 nonprofit-sensitive infrastructure budget, and a 5-10 year project lifespan.
@@ -28,33 +32,34 @@ application containers, Cloudflare at the edge, and deferring OpenSearch are all
 appropriate choices.
 
 The primary risk is operational concentration. A single OKE cluster is planned
-to run `dev`, `test`, `prod`, application workloads, Cantaloupe, and GitHub
-Actions Runner Controller. This is cost-efficient, but it makes OKE the control
-plane for both production serving and production deployment.
+to run `dev`, `test`, `prod`, application workloads, and Cantaloupe. This is
+cost-efficient, but OKE should not also become the required control plane for
+deployment before the August 1 launch.
 
 This tradeoff is acceptable only if the implementation adds guardrails before
 production launch.
 
 ## Highest-Risk Items
 
-### CI/CD Depends On The Cluster It Deploys
+### CI/CD Must Not Depend On The Cluster It Deploys
 
-Actions Runner Controller runs inside OKE. If OKE is degraded, deleted, or
-unreachable, the normal deployment path is also degraded.
+Actions Runner Controller would run inside OKE. If OKE is degraded, deleted, or
+unreachable, any ARC-dependent deployment path is also degraded.
 
 Recommendations:
 
-- Keep ARC for normal deployments.
-- Document and test a break-glass deployment path that does not require ARC.
-- Allow emergency recovery from GitHub-hosted runners or an approved engineer
-  workstation flow.
-- Restore ARC after core OKE and application recovery, not before.
-- Add the break-glass path to `docs/runbooks/disaster-recovery.md`.
+- Defer ARC from the August 1 launch.
+- Use GitHub-hosted runners for CI and immutable image builds.
+- Deploy with Helm from an approved workstation or OCI Cloud Shell.
+- Add ARC later only if private automated deployment is a confirmed
+  requirement.
+- Keep the manual Helm deployment path documented and tested.
 
 ### Organization-Scoped Self-Hosted Runners Are High Privilege
 
 The planned ARC scale set is organization-scoped and uses Docker-in-Docker. This
-is convenient, but it expands the blast radius of compromised workflows.
+is deferred from the August 1 launch because it expands the blast radius of
+compromised workflows.
 
 Recommendations:
 

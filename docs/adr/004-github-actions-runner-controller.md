@@ -2,7 +2,7 @@
 
 Date: 2026-06-21
 
-Status: Accepted
+Status: Deferred for August 1, 2026 launch by ADR-007
 
 ## Context
 

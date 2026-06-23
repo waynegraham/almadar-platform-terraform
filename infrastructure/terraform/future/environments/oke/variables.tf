@@ -67,6 +67,12 @@ variable "kubernetes_version" {
   default     = "v1.33.1"
 }
 
+variable "cluster_type" {
+  description = "OKE cluster type. Use BASIC_CLUSTER for the August 1 launch unless Enhanced features are required."
+  type        = string
+  default     = "BASIC_CLUSTER"
+}
+
 variable "node_image_id" {
   description = "OKE worker node image OCID for the selected region and Kubernetes version."
   type        = string

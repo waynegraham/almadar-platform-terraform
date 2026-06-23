@@ -19,9 +19,9 @@ env:
   PORT: "1337"
   NODE_ENV: production
   DATABASE_CLIENT: postgres
-  DATABASE_HOST: postgres
+  DATABASE_HOST: "<OCI_POSTGRES_PRIVATE_IP_OR_DNS>"
   DATABASE_PORT: "5432"
-  DATABASE_SSL: "false"
+  DATABASE_SSL: "true"
   S3_ENDPOINT: ""
 
 args: []
@@ -30,6 +30,8 @@ migrations:
   enabled: true
 
 initContainers:
+  postgres:
+    host: "<OCI_POSTGRES_PRIVATE_IP_OR_DNS>"
   minio:
     enabled: false
 

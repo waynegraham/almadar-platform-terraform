@@ -1,159 +1,142 @@
 # OCI Infrastructure Sizing and Cost Report
 
-Date: 2026-06-22
+Date: 2026-06-23
 
 ## Purpose
 
 This report recommends an initial Oracle Cloud Infrastructure sizing plan for
-the AlMadar platform and lists the OCI resources that can create recurring or
-usage-based cost. It is intended for budgeting and implementation planning, not
-as a fixed quote.
+the simplified August 1, 2026 AlMadar launch. It is intended for budgeting and
+implementation planning, not as a fixed quote.
 
 Use the OCI Cost Estimator before procurement or production launch. OCI pricing
-varies by region, currency, discounts, and usage. Oracle's public price list
-also shows that many relevant resources are metered by different units:
-compute by OCPU and memory hours, OKE Enhanced Cluster by cluster hour, load
-balancers by load balancer hour and bandwidth, PostgreSQL by OCPU and storage,
-Object Storage by capacity and requests, and logging/monitoring by usage.
+varies by region, currency, discounts, and usage.
 
 ## Planning Assumptions
 
 - Current collection scale is approximately 1,000 collection objects.
-- The platform serves a public Next.js frontend, a Strapi CMS, and IIIF images
-  through Cantaloupe.
-- Cantaloupe will serve approximately 100 GB of production IIIF source images
-  from OCI Object Storage at launch.
-- Production data should live in managed services, not in application pods.
+- The platform serves a public Next.js frontend, a Strapi CMS, IIIF images
+  through Cantaloupe, video, and audio.
+- Launch media scale is approximately 100 GB of IIIF images, 50 GB of video,
+  and 5 GB of audio.
+- Production data should live in managed services, not on application VMs.
+- Saudi government requirements require self-hosted GitHub Actions runners.
 - The organization should prefer a small, boring, recoverable platform over
   speculative scale.
 - The primary production region should be one OCI region, currently expected to
-  be `me-riyadh-1`. A second active region should be treated as a disaster
-  recovery project with separate budget approval.
+  be `me-riyadh-1`.
 
 ## Recommended Starting Size
 
 | Area | Recommendation | Why |
 | --- | --- | --- |
-| OKE cluster | Single production OKE cluster, Basic Cluster if feature requirements allow | Basic Cluster avoids the OKE Enhanced Cluster hourly charge. Use Enhanced only if the team needs features that justify the recurring cluster cost. |
-| OKE worker nodes | 3 managed worker nodes, `VM.Standard.E4.Flex` or current regional successor, 2 OCPUs and 16 GB RAM each | Provides enough headroom for frontend, CMS, Cantaloupe, system pods, rolling deploys, and one node failure while staying modest. |
-| Production PostgreSQL | OCI Database with PostgreSQL managed service, 1 DB system, 1 instance, `VM.Standard.E4.Flex`, 2 OCPUs, 16 GB RAM, optimized storage, 14-30 day backups | Matches current Terraform defaults and keeps production data out of Kubernetes and self-managed compute. Increase after real query and editor workload measurements. |
-| Object Storage | Six Standard-tier buckets: `iiif-dev`, `iiif-test`, `iiif-prod`, `strapi-dev`, `strapi-test`, `strapi-prod`, versioning enabled, old previous versions deleted after 180 days. Budget at least 100 GB for `iiif-prod` source images at launch. | Keeps media outside pods and separates environments. Version lifecycle limits storage growth from replaced assets, but previous versions and non-production copies can increase billed storage beyond the raw 100 GB corpus. |
-| Load balancing | One public flexible OCI Load Balancer for application ingress, minimum 10 Mbps and maximum 100 Mbps to start | Enough for a small public site behind Cloudflare. Increase only after measured origin traffic requires it. |
-| Cantaloupe cache | Start with per-pod or small PVC cache, 10 GiB as currently documented | The 100 GB source corpus remains in Object Storage. Cantaloupe cache stores generated derivatives and should be treated as disposable. Increase cache only after measuring hot tile reuse and Cloudflare cache hit ratio. |
-| GitHub Actions runners | Keep ARC `minRunners=0`; reduce initial `maxRunners` from 10 to 2-3 unless concurrent build demand is proven | Runner pods consume OKE node CPU and memory. A max of 10 can force larger worker nodes or more nodes. |
-| Non-production | Run `dev` and `test` in the same cluster with low replica counts. Avoid separate OCI Database with PostgreSQL DB systems unless isolation is required. | Non-production managed databases and always-on replicas can dominate costs for a small platform. |
-| Observability | Use default OCI metrics and keep logging retention conservative | OCI Logging has free included storage, then usage-based cost. Keep retention and ingestion intentional. |
+| Application runtime | 1 OCI Compute VM running Docker Compose | Simplest runtime for Next.js, Strapi, Cantaloupe, and a reverse proxy at current scale. |
+| Application VM size | Start at 4 OCPUs and 24-32 GB RAM | Provides headroom for Strapi, frontend, Cantaloupe tile generation, proxy, Docker overhead, and cache activity. Adjust after measurement. |
+| Application VM storage | Boot volume plus block volume for Docker data, logs, and Cantaloupe derivative cache | Do not store durable media on the VM. Size cache for performance, not for the full media corpus. |
+| GitHub Actions runner | 1 separate OCI Compute VM | Required by policy and isolates build/deployment activity from public application workloads. |
+| Runner VM size | Start at 2 OCPUs and 8-16 GB RAM | Enough for moderate Node/Docker builds. Increase if image builds are slow or memory-bound. |
+| Production PostgreSQL | OCI Database with PostgreSQL managed service, 1 production DB system | Keeps Strapi data out of the VM and gives managed backup/restore primitives. |
+| Object Storage | Standard-tier buckets or prefixes for Strapi uploads, IIIF images, video, and audio | Durable source of truth for media. Budget for at least 155 GB plus versions, uploads, and growth. |
+| Cloudflare | DNS, TLS, CDN, WAF, Access | Keeps public edge controls outside the VM and reduces origin traffic. |
+| Cantaloupe cache | Local disposable filesystem cache on the app VM | Source media remains durable in Object Storage. Add more cache only after measuring hit rates. |
+| Kubernetes/OKE | 0 for launch | Not required for the first production release. |
+| Load balancer | 0 initially if Cloudflare points directly to app VM; add 1 OCI Load Balancer only if a second app VM is introduced | Avoid a moving part until high availability requires it. |
 
 ## Cost-Bearing OCI Inventory
 
-### Compute and Kubernetes
+### Compute
 
 | Resource | Recommended quantity | Cost driver | Notes |
 | --- | ---: | --- | --- |
-| OKE control plane | 1 cluster | Basic Cluster is listed as free; Enhanced Cluster is billed per cluster hour | Terraform currently defaults `cluster_type` to `ENHANCED_CLUSTER`. For nonprofit cost control, use `BASIC_CLUSTER` unless Enhanced features are required. |
-| OKE worker compute | 3 nodes x 2 OCPUs x 16 GB RAM | OCPU hours, memory GB hours, boot volume storage | Flexible shapes bill CPU and memory separately. Boot volumes are billed as Block Volume storage. |
-| ARC runner pods | 0 idle, burst to 2-3 initially | Same worker node capacity as other Kubernetes pods | Runners do not create direct OCI compute charges by themselves, but they require enough worker capacity. High concurrency may require larger or additional nodes. |
-| OCIR image storage | One repository set for frontend and Strapi images | Container image storage, same basis as Object Storage Standard | Production images should be immutable. Keep retention rules so old images do not accumulate indefinitely. |
+| Application VM | 1 | OCPU hours, memory GB hours, boot/block volume storage | Runs proxy, Next.js, Strapi, and Cantaloupe. |
+| Runner VM | 1 | OCPU hours, memory GB hours, boot volume storage | Runs self-hosted GitHub Actions runner and build/deploy tooling. |
+| Additional app VM | 0 initially | Same as app VM plus load balancing | Add only if recovery-time requirements demand VM redundancy. |
+| OKE control plane and workers | 0 for launch | Cluster and worker costs if reintroduced | Deferred. |
+| OCIR image storage | Repositories for frontend and Strapi images | Container image storage | Use immutable tags and retention rules. |
 
 ### Database
 
 | Resource | Recommended quantity | Cost driver | Notes |
 | --- | ---: | --- | --- |
-| OCI Database with PostgreSQL, prod | 1 managed DB system, 1 instance, 2 OCPUs, 16 GB RAM | Provisioned OCPUs, selected memory/resources, optimized storage usage, backup retention | This should be Oracle's managed PostgreSQL service, provisioned by `infrastructure/terraform/modules/managed-postgresql`, not PostgreSQL inside OKE. |
-| OCI Database with PostgreSQL, dev/test | Prefer shared non-production managed DB system or local/k3d for routine work | Same as production if provisioned | Separate managed DB systems for every non-prod environment are cleaner but likely expensive relative to project scale. |
-| PostgreSQL backups | 14 days minimum, 30 days for production if budget allows | Backup and storage-related usage | Longer retention improves recovery but increases storage cost. |
+| OCI Database with PostgreSQL, prod | 1 managed DB system | Provisioned compute, storage, backup retention | Start modestly and scale after real Strapi/admin/API measurements. |
+| OCI Database with PostgreSQL, non-prod | 0 initially unless shared cloud testing requires it | Same as production if provisioned | Local Docker Compose should cover routine development. |
+| PostgreSQL backups | 14 days minimum, 30 days if budget allows | Backup and storage-related usage | Recovery requirements should drive retention. |
 
 ### Storage
 
 | Resource | Recommended quantity | Cost driver | Notes |
 | --- | ---: | --- | --- |
-| OCI Object Storage Standard buckets | 6 buckets, with at least 100 GB in `iiif-prod` at launch | GB stored per month and request volume | IIIF source images and Strapi uploads are durable platform assets. Cloudflare should absorb repeat public image traffic where possible. |
-| Object versioning | Enabled | Previous object versions consume storage until lifecycle deletion | The 100 GB production corpus can cost more than 100 GB if images are replaced and previous versions are retained. Current lifecycle deletes previous versions after 180 days. Shorten for non-production if storage grows. |
-| Object requests | Usage-based | Request count | IIIF tile access can create many reads. Cache aggressively at Cloudflare for public image derivatives. |
-| Cantaloupe PVC or Block Volume | 10 GiB to start | Block Volume GB/month and performance units if changed | Treat as cache, not source of truth. Do not size this to the 100 GB image corpus unless measurements show local derivative cache capacity is the bottleneck. |
+| OCI Object Storage Standard buckets | Production buckets or prefixes for IIIF, Strapi uploads, video, and audio | GB stored per month and request volume | Budget for at least 155 GB raw media plus versions and growth. |
+| Object versioning | Enable for production, lifecycle old versions | Previous versions consume storage | Use lifecycle policies to avoid uncontrolled growth. |
+| Object requests | Usage-based | Request count | IIIF and media access can create many reads; cache public derivatives and media at Cloudflare. |
+| App VM block volume | 1 cache/log volume | GB/month and performance settings | Disposable operational data only. |
 
 ### Networking
 
 | Resource | Recommended quantity | Cost driver | Notes |
 | --- | ---: | --- | --- |
-| OCI Load Balancer | 1 public flexible LB | Load balancer hour and bandwidth units | Put Cloudflare in front and keep the origin LB small at launch. |
-| NAT Gateway | 1 per active VCN/region | NAT gateway service and/or processed traffic, depending current OCI pricing | Needed for private worker nodes to reach the internet for image pulls and updates. A Service Gateway can reduce NAT usage for OCI service traffic. |
-| Service Gateway | 1 per active VCN/region | Usually no direct gateway charge, but verify current regional pricing | Use for private access to OCI Object Storage and other Oracle services to reduce public/NAT paths. |
-| Internet Gateway | 1 per active VCN/region | Usually no direct gateway charge; outbound data transfer can apply | Required for public load balancer paths. |
-| Outbound data transfer | Usage-based | GB egress over regional free allowance | Cloudflare caching should reduce OCI origin egress for static assets and IIIF derivatives. |
-| DNS | Prefer Cloudflare DNS, not OCI DNS | OCI DNS is query-metered if used | Current architecture assigns DNS responsibility to Cloudflare. |
+| Public IP for app VM | 1 | Public IP and data transfer pricing as applicable | Cloudflare should be the normal public entrypoint. |
+| Public IP or private admin access for runner VM | 1 or private-only with approved access path | Public IP and data transfer pricing as applicable | Restrict SSH/admin access. |
+| NAT Gateway | 1 if VMs are private or need controlled outbound internet | Gateway and processed traffic, depending current pricing | Public subnet deployment may avoid NAT but increases exposure. |
+| Service Gateway | 1 per VCN | Usually no direct gateway charge, verify current pricing | Prefer private access to OCI Object Storage where practical. |
+| Load Balancer | 0 initially | Load balancer hour and bandwidth units | Add with a second app VM. |
+| Outbound data transfer | Usage-based | GB egress over regional allowances | Cloudflare caching should reduce OCI origin egress. |
 
 ### Secrets and Security
 
 | Resource | Recommended quantity | Cost driver | Notes |
 | --- | ---: | --- | --- |
-| OCI Vault default vault | 1 vault | Default Vault software-protected keys and secrets are listed as free on the public price list | Current Terraform uses `vault_type = "DEFAULT"`. Keep this unless compliance requires a private vault or HSM-backed keys. |
-| Private Vault | 0 initially | Virtual private vault per hour | Do not use without a documented security or compliance requirement. |
-| HSM-protected key versions | 0 initially | Key version per month beyond free allowances | Software-protected keys are adequate for this baseline unless policy requires HSM. |
-| OCI WAF / Network Firewall | 0 initially | Instance, request, and/or data processing charges | Cloudflare is already the documented WAF/CDN layer. Do not duplicate unless there is a specific requirement. |
+| OCI Vault default vault | 1 if used | Vault/secret/key pricing depends on vault type and key type | Keep secrets out of Git and production env examples. |
+| Private Vault | 0 initially | Virtual private vault per hour | Do not use without compliance requirement. |
+| OCI Network Firewall | 0 initially | Instance/request/data processing charges | Cloudflare is already the public WAF/CDN layer. |
 
 ### Observability and Operations
 
 | Resource | Recommended quantity | Cost driver | Notes |
 | --- | ---: | --- | --- |
-| OCI Logging | Conservative retention | First included allowance is free, then GB log storage per month | Keep application log volume moderate and set retention intentionally. |
-| OCI Monitoring | Default metrics plus required alarms | Included allowance, then datapoint ingestion/retrieval | Use alarms for availability, node health, database CPU/storage, and load balancer health. |
-| Notifications | Required operational alerts only | Included allowance, then delivery operations | Use for production alarms and backup failure notifications. |
-
-## Kubernetes Capacity Check
-
-The production Helm values currently request approximately:
-
-| Workload | Replicas | CPU request | Memory request |
-| --- | ---: | ---: | ---: |
-| Frontend | 2 | 500m total | 1 GiB total |
-| Strapi | 2 | 1000m total | 2 GiB total |
-| Cantaloupe | 2 | 500m total | 1.5 GiB total |
-| ARC controller | 1 | 100m | 128 MiB |
-| One active runner | 1 | 500m | 1 GiB |
-
-Three 2-OCPU / 16-GB worker nodes provide 6 OCPUs and 48 GB RAM before system
-overhead. This is enough for the current app requests, rolling deployments, and
-a small number of active runner pods. CPU, not memory, is the limiting resource
-if many runner jobs start at once.
+| OCI Logging or host log retention | Conservative retention | Log storage/ingestion or block volume usage | Keep application log volume intentional and rotated. |
+| OCI Monitoring | Required alarms | Metrics and alarm usage | Alert on VM health, disk usage, PostgreSQL, and public endpoint failures. |
+| Notifications | Required operational alerts only | Delivery operations | Use for production alarms and backup failure notifications. |
 
 ## Recommended Environment Plan
 
 ### Production
 
-- One OKE cluster with three worker nodes.
+- One application VM running Docker Compose.
+- One runner VM for self-hosted GitHub Actions.
 - One OCI Database with PostgreSQL managed DB system.
-- Production Object Storage buckets for IIIF and Strapi media, including about
-  100 GB of IIIF source images in `iiif-prod`.
-- OCI Vault default vault and software-protected key.
-- One public OCI Load Balancer behind Cloudflare.
-- ARC enabled with zero idle runners and a low initial concurrency cap.
+- Production Object Storage buckets or prefixes for IIIF, Strapi uploads,
+  video, and audio.
+- Cloudflare fronting frontend, CMS/API, and IIIF endpoints.
+- OCIR repositories for immutable app images.
 
 ### Test
 
-- Same OKE cluster, `test` namespace.
-- One replica per application unless testing release behavior requires two.
-- Prefer shared non-production OCI Database with PostgreSQL or a single smaller
-  managed DB system.
-- Use separate `iiif-test` and `strapi-test` buckets.
-- Keep backup and log retention shorter than production.
+- Prefer the same application VM pattern only if shared staging is required.
+- Otherwise use local Docker Compose and validation tests.
+- Use separate Object Storage buckets or prefixes if cloud test media is
+  required.
 
 ### Development
 
 - Local Docker Compose should remain the default daily development path.
-- Use the `dev` namespace for integration checks that specifically require
-  Kubernetes behavior.
-- Avoid always-on managed development databases unless the team needs shared
-  integration state.
+- Do not provision always-on managed development infrastructure unless the team
+  needs shared integration state.
 
 ## Scaling Triggers
 
-Increase OKE worker size or count when:
+Increase application VM size when:
 
-- sustained node CPU exceeds 60-70% during normal traffic,
-- rolling deploys cannot schedule without evicting healthy pods,
-- ARC jobs regularly wait for capacity,
-- Cantaloupe tile generation causes sustained CPU saturation.
+- sustained CPU exceeds 60-70% during normal traffic,
+- Cantaloupe tile generation causes sustained CPU saturation,
+- Strapi admin/API latency correlates with VM CPU or memory pressure,
+- Docker containers restart due to memory pressure,
+- local cache/log volume regularly exceeds planned utilization.
+
+Increase runner VM size when:
+
+- Docker builds are consistently slow,
+- Node builds fail or swap due to memory pressure,
+- deployment jobs compete with image builds.
 
 Increase PostgreSQL when:
 
@@ -162,49 +145,47 @@ Increase PostgreSQL when:
 - Strapi admin/API latency correlates with database waits,
 - storage growth or backup windows exceed operational targets.
 
-Increase Object Storage and caching controls when:
+Add a second application VM and load balancer when:
 
-- IIIF tile requests materially increase origin reads,
-- Cloudflare cache hit ratio is low for immutable IIIF derivatives,
-- previous object versions grow faster than expected,
-- `iiif-prod` grows materially beyond the initial 100 GB source image corpus,
-- restored-object testing shows lifecycle settings are too aggressive.
+- required recovery time is shorter than app VM rebuild time,
+- planned maintenance cannot tolerate downtime,
+- traffic measurements justify horizontal redundancy.
 
 ## Items Not Recommended Initially
 
-- Separate production OKE cluster for each environment.
+- OKE/Kubernetes.
+- Helm production deployment.
+- Actions Runner Controller.
 - Active multi-region deployment in both Riyadh and Jeddah.
 - OpenSearch.
 - OCI Network Firewall in addition to Cloudflare.
 - Private Vault or HSM-protected keys without a compliance requirement.
-- Large persistent Cantaloupe cache volumes.
-- High ARC runner concurrency before measuring build demand.
+- Large persistent Cantaloupe cache sized to the full media corpus.
+- Separate managed DB systems for every non-production environment.
 
 ## Cost Estimator Inputs
 
 Use these inputs as the first OCI Cost Estimator pass:
 
 - Region: `me-riyadh-1`.
-- OKE: 1 Basic Cluster, or 1 Enhanced Cluster if chosen intentionally.
-- Compute: 3 x `VM.Standard.E4.Flex`, 2 OCPUs, 16 GB RAM, boot volumes.
-- Load Balancer: 1 flexible load balancer, 10 Mbps minimum, 100 Mbps maximum.
-- PostgreSQL: 1 OCI Database with PostgreSQL managed DB system, 1 instance,
-  2 OCPUs, 16 GB RAM, optimized storage, 14-30 days backup retention.
-- Object Storage: start with 100 GB for `iiif-prod` source images, then add
-  Strapi media, non-production IIIF copies, previous object versions, and
-  container images.
-- Block Volume: worker boot volumes plus 10 GiB Cantaloupe cache PVC if using
-  persistent cache.
-- Vault: Default Vault with software-protected key and secrets.
-- Logging: estimate monthly log storage beyond the free included amount.
+- Compute: 1 app VM, 4 OCPUs, 24-32 GB RAM.
+- Compute: 1 runner VM, 2 OCPUs, 8-16 GB RAM.
+- Block Volume: app VM cache/log volume plus boot volumes.
+- PostgreSQL: 1 OCI Database with PostgreSQL managed DB system, 14-30 days
+  backup retention.
+- Object Storage: at least 155 GB raw launch media plus Strapi uploads,
+  previous object versions, and growth.
+- OCIR: frontend and Strapi image repositories with retention.
+- Load Balancer: 0 initially; add only if introducing a second app VM.
+- Vault: Default Vault with software-protected key and secrets if used.
+- Logging/Monitoring: estimate log retention and alarm usage.
 - Networking: estimate outbound data transfer after Cloudflare caching.
 
 ## Source Notes
 
-- Oracle's public price list documents OCPU and memory-based compute pricing,
-  boot volume billing, OKE Basic versus Enhanced Cluster billing, load balancer
-  billing units, outbound data transfer units, PostgreSQL billing drivers,
-  Object Storage and Block Volume units, and Vault/KMS/Secrets cost categories:
+- OCI Terraform provider documentation includes resource families for Compute,
+  networking, Object Storage, Vault/secrets, container repositories, and related
+  infrastructure used by this plan.
+- Oracle's public price list should be used before procurement for current
+  compute, storage, networking, database, and logging rates:
   <https://www.oracle.com/cloud/price-list/>
-- OCI documentation supports flexible OKE node shape configuration and flexible
-  load balancer sizing through Kubernetes service annotations.

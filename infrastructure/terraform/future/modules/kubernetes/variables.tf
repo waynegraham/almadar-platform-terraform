@@ -47,7 +47,7 @@ variable "kubernetes_version" {
 variable "cluster_type" {
   description = "OKE cluster type."
   type        = string
-  default     = "ENHANCED_CLUSTER"
+  default     = "BASIC_CLUSTER"
 }
 
 variable "pods_cidr" {

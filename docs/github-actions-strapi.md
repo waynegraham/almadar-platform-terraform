@@ -1,4 +1,4 @@
-# Strapi GitHub Actions Deployment
+# Strapi GitHub Actions Image Build
 
 The Strapi workflow is defined in:
 
@@ -6,29 +6,24 @@ The Strapi workflow is defined in:
 .github/workflows/strapi.yml
 ```
 
-It runs on the OCI-hosted GitHub Actions runner label:
-
-```text
-almadar-oci-oke
-```
+For the August 1 production launch, this workflow runs on GitHub-hosted runners.
+It builds and pushes immutable Strapi images to OCIR. It does not deploy to OKE.
 
 ## Flow
 
 1. Install dependencies with `npm ci`.
-2. Run `npm test`, which builds the Strapi application.
+2. Run `npm test`, which currently builds the Strapi application.
 3. Build the Strapi Docker image from `apps/strapi/Dockerfile`.
-4. Push the image to OCIR.
-5. Run the Helm pre-install/pre-upgrade migration job.
-6. Deploy Strapi with Helm and wait for rollout completion.
-7. Run platform validation tests for Strapi, PostgreSQL, Object Storage,
-   Cantaloupe, IIIF thumbnails, and the frontend.
+4. Push the image to OCIR with two tags:
+   - `<environment>-<git-sha>`
+   - `<environment>-latest`
 
 Branch mapping:
 
-- `develop` deploys to `dev`.
-- `release/*` deploys to `test`.
-- `main` deploys to `prod`.
-- `workflow_dispatch` can deploy to `dev`, `test`, or `prod`.
+- `develop` builds a `dev-*` image.
+- `release/*` builds a `test-*` image.
+- `main` builds a `prod-*` image.
+- `workflow_dispatch` can build for `dev`, `test`, or `prod`.
 
 ## GitHub Variables
 
@@ -37,18 +32,6 @@ Configure these repository or organization variables:
 ```text
 OCIR_REGISTRY
 OCIR_NAMESPACE
-FRONTEND_URL
-STRAPI_URL
-CANTALOUPE_URL
-POSTGRES_HOST
-POSTGRES_PORT
-POSTGRES_DB
-POSTGRES_USER
-POSTGRES_SSL
-S3_ENDPOINT
-S3_REGION
-S3_FORCE_PATH_STYLE
-IIIF_BUCKET
 ```
 
 Example:
@@ -65,59 +48,39 @@ Configure these repository or organization secrets:
 ```text
 OCIR_USERNAME
 OCIR_AUTH_TOKEN
-OKE_KUBECONFIG_B64
-POSTGRES_PASSWORD
-S3_ACCESS_KEY_ID
-S3_SECRET_ACCESS_KEY
-STRAPI_UPLOAD_TOKEN
 ```
 
-`OKE_KUBECONFIG_B64` is a base64-encoded kubeconfig for the target OKE cluster:
+Do not commit OCIR tokens or OCI credentials.
+
+## Deployment
+
+Deployment is intentionally separate from the GitHub Actions image build during
+the August 1 launch. Use the approved Helm deployment flow in:
+
+```text
+docs/production-deployment-plan.md
+```
+
+The deployment operator supplies the image tag produced by this workflow:
 
 ```bash
-base64 -i generated/oke-kubeconfig.yaml
+export STRAPI_IMAGE="<OCIR_REGISTRY>/<OCIR_NAMESPACE>/almadar-strapi"
+export STRAPI_TAG="prod-<git-sha>"
 ```
 
-Do not commit kubeconfig files, OCIR tokens, or OCI credentials.
-
-`STRAPI_UPLOAD_TOKEN` must be a Strapi API token or equivalent bearer token
-with permission to upload media through `/api/upload`. The validation pipeline
-intentionally fails if this token is missing or does not have upload permission.
-
-## GitHub Environments
-
-Create GitHub Environments named:
-
-```text
-dev
-test
-prod
-```
-
-Use required reviewers for `prod` before enabling unattended production
-deployment.
-
-## Content Model Changes
-
-Strapi database migration files in `apps/strapi/database/migrations` are run by:
-
-```text
-npm run migrate
-```
-
-The Helm chart runs that command as a pre-install/pre-upgrade hook before the
-Deployment is rolled forward. If migrations or content-type schema sync fail,
-`helm upgrade --atomic` fails and rolls the release back.
+Then run the Strapi Helm command from the production deployment plan.
 
 ## Validation
 
-The workflow runs the Playwright validation suite in:
+Run the platform validation suite after deployment:
 
-```text
-tests/validation
+```bash
+cd tests/validation
+npm ci
+npm test
 ```
 
-The validation step fails the pipeline if any required platform check fails:
+The validation suite checks:
 
 - Strapi health.
 - PostgreSQL query.

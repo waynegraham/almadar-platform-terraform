@@ -1,0 +1,81 @@
+# OCI API credentials.
+tenancy_ocid     = "ocid1.tenancy.oc1..replace-me"
+user_ocid        = "ocid1.user.oc1..replace-me"
+fingerprint      = "00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00"
+private_key_path = "~/.oci/oci_api_key.pem"
+region           = "me-riyadh-1"
+
+# Use either compartment_id or compartment_name.
+compartment_id = "ocid1.compartment.oc1..replace-me"
+# compartment_name = "almadar-prod"
+
+project_name = "almadar"
+environment  = "prod"
+
+# Networking.
+vcn_cidr             = "10.40.0.0/16"
+app_subnet_cidr      = "10.40.10.0/24"
+runner_subnet_cidr   = "10.40.20.0/24"
+database_subnet_cidr = "10.40.30.0/24"
+
+# Restrict SSH to approved office/VPN/admin CIDRs.
+ssh_source_cidrs = [
+  "203.0.113.10/32"
+]
+
+# Prefer Cloudflare origin CIDRs here for production.
+http_source_cidrs = [
+  "0.0.0.0/0"
+]
+
+ssh_public_key = "ssh-ed25519 AAAA... replace-me"
+
+# Application VM.
+app_instance_shape   = "VM.Standard.E4.Flex"
+app_ocpus            = 4
+app_memory_gbs       = 32
+app_boot_volume_gbs  = 100
+app_data_volume_gbs  = 200
+
+# GitHub runner VM.
+runner_instance_shape  = "VM.Standard.E4.Flex"
+runner_ocpus           = 2
+runner_memory_gbs      = 16
+runner_boot_volume_gbs = 100
+
+# Platform image lookup.
+instance_image_operating_system         = "Oracle Linux"
+instance_image_operating_system_version = "9"
+
+# Managed PostgreSQL.
+postgres_admin_username       = "strapi_admin"
+postgres_admin_password       = "replace-with-a-long-random-password"
+postgres_database_name        = "strapi"
+postgres_db_version           = "16"
+postgres_shape                = "VM.Standard.E4.Flex"
+postgres_instance_count       = 1
+postgres_ocpus                = 2
+postgres_memory_gbs           = 16
+postgres_backup_retention_days = 14
+
+# Object Storage.
+bucket_names = {
+  strapi_uploads = "almadar-prod-strapi-uploads"
+  iiif_sources   = "almadar-prod-iiif-sources"
+  backups        = "almadar-prod-backups"
+}
+
+bucket_versioning                       = "Enabled"
+backup_previous_version_retention_days  = 180
+
+# Optional Vault. If enabled, Terraform state will still contain secret payloads.
+enable_vault = false
+vault_type   = "DEFAULT"
+
+additional_secret_payloads = {
+  # strapi-app-keys = "replace-me"
+}
+
+freeform_tags = {
+  Owner = "AlMadar"
+}

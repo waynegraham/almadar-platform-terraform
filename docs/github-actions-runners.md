@@ -1,7 +1,14 @@
 # GitHub Actions OCI Runners
 
+Status: Deferred from the August 1, 2026 production launch by
+[ADR-007](adr/007-simplified-august-2026-launch.md).
+
 AlMadar uses GitHub Actions Runner Controller (ARC) on OKE to provide ephemeral,
 autoscaled, OCI-hosted self-hosted runners for the GitHub organization.
+
+For the August 1 launch, frontend and Strapi images are built on GitHub-hosted
+runners and deployment is performed from an approved workstation or OCI Cloud
+Shell. Use this document only if ARC is reintroduced after launch.
 
 ## Architecture
 

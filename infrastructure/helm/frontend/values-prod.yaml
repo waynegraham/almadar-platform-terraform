@@ -2,14 +2,29 @@ environment: prod
 
 replicaCount: 2
 
+image:
+  repository: "<OCIR_REGISTRY>/<OCIR_NAMESPACE>/almadar-frontend"
+  tag: latest
+  pullPolicy: IfNotPresent
+
+workingDir: /opt/app
+
+command: []
+args: []
+
 env:
   NODE_ENV: production
   NEXT_TELEMETRY_DISABLED: "1"
   FRONTEND_PORT: "3000"
   STRAPI_INTERNAL_URL: http://strapi:1337
 
-args:
-  - npm ci && npm run build && npm run start -- --hostname 0.0.0.0 --port 3000
+volumes:
+  source:
+    enabled: false
+  nodeModules:
+    enabled: false
+  nextCache:
+    enabled: false
 
 resources:
   requests:
@@ -18,4 +33,3 @@ resources:
   limits:
     cpu: "1"
     memory: 1Gi
-

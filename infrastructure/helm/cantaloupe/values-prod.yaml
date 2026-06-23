@@ -8,6 +8,10 @@ service:
 env:
   CANTALOUPE_S3SOURCE_ENDPOINT: ""
 
+initContainers:
+  minio:
+    enabled: false
+
 resources:
   requests:
     cpu: 250m
@@ -17,4 +21,5 @@ resources:
     memory: 1536Mi
 
 persistence:
+  enabled: false
   size: 10Gi

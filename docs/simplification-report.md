@@ -1,294 +1,442 @@
-# Architecture Simplification Report
+# August 1 Production Simplification Plan
 
-Date: 2026-06-22
+Date: 2026-06-23
+
+Target launch date: August 1, 2026
 
 ## Purpose
 
-This report identifies where the current AlMadar infrastructure could be
-simplified and deployed more easily while preserving the core platform
-requirements:
+This plan simplifies the AlMadar production launch architecture around the
+actual launch scale:
 
-- public Next.js frontend,
-- Strapi CMS,
-- Cantaloupe IIIF image service,
-- approximately 100 GB of production IIIF source images,
-- OCI Database with PostgreSQL managed service,
-- OCI Object Storage as durable media storage,
-- Cloudflare for DNS, TLS, CDN, and WAF.
+- approximately 1,000 works,
+- approximately 2,500 images,
+- approximately 100 GB of IIIF image data,
+- approximately 50 GB of video,
+- approximately 5 GB of audio,
+- only a few dozen public pages,
+- Saudi government requirement for self-hosted GitHub Actions runners.
 
-The goal is not to remove infrastructure as code. The goal is to reduce the
-number of moving parts an engineer must understand, deploy, and recover.
+The launch goal is strong performance and reliability with as few moving parts
+as possible. Kubernetes and OKE are not required for this scale and should not
+be in the August 1 production path unless a concrete requirement appears that
+Docker Compose on OCI Compute cannot satisfy.
 
 ## Executive Recommendation
 
-The largest simplification opportunity is to reduce Kubernetes operational
-scope. The current architecture is sound, but OKE, Helm, External Secrets
-Operator, Actions Runner Controller, namespaces, RBAC, and GitHub self-hosted
-runners create a platform that is more complex than the current content scale
-requires.
+Use a two-VM OCI production runtime:
 
-The simplest practical production architecture is:
+- one OCI Compute VM runs Docker Compose for Next.js, Strapi, Cantaloupe, and
+  Caddy or nginx,
+- one separate OCI Compute VM runs the self-hosted GitHub Actions runner,
+- OCI Database with PostgreSQL stores Strapi data,
+- OCI Object Storage stores Strapi uploads, IIIF source images, video, and
+  audio,
+- Cloudflare fronts all public traffic,
+- the application VM uses local disk only for Docker data, logs, and
+  Cantaloupe derivative cache.
 
-- run Next.js, Strapi, and Cantaloupe as OCI container workloads or a small
-  self-managed container host,
-- keep OCI Database with PostgreSQL managed service for production data,
-- keep OCI Object Storage for Strapi media and IIIF source images,
-- keep Cloudflare in front of the public services,
-- use GitHub-hosted runners for CI/CD unless OCI-hosted runners are explicitly
-  required,
-- keep Terraform for OCI network, Object Storage, PostgreSQL, Vault, and the
-  application runtime.
+This keeps the durable data layer managed, keeps media out of containers and
+VM-local filesystems, and removes the launch burden of OKE, Helm, Kubernetes
+RBAC, External Secrets Operator, Actions Runner Controller, node pools, cluster
+upgrades, and Kubernetes disaster recovery.
 
-If the team wants to keep Kubernetes, simplify within Kubernetes first: one
-region, one OKE cluster, no Actions Runner Controller initially, no separate
-managed PostgreSQL DB systems for every non-production environment, and no
-persistent shared Cantaloupe cache unless measurements prove it is needed.
+## Target Production Architecture
 
-## Current Complexity Drivers
+```text
+Cloudflare
+  -> OCI application VM public origin
+       -> Caddy/nginx reverse proxy
+       -> Next.js container
+       -> Strapi container
+       -> Cantaloupe container
+       -> local Docker volumes for logs/cache only
 
-| Area | Why it adds complexity | Simplification option |
+GitHub
+  -> separate OCI runner VM
+       -> self-hosted GitHub Actions runner
+       -> builds frontend and Strapi images
+       -> pushes to OCIR
+       -> deploys to application VM over SSH
+
+Managed OCI services
+  -> OCI Database with PostgreSQL
+  -> OCI Object Storage buckets
+  -> OCI Vault or documented secret injection process
+```
+
+Public hostnames should terminate at Cloudflare and route to the reverse proxy
+on the application VM. Suggested hostname split:
+
+- `www` or apex: Next.js frontend,
+- `cms`: Strapi admin and API, protected with Cloudflare Access,
+- `iiif`: Cantaloupe IIIF image service,
+- media asset hostnames or paths: Object Storage via Strapi URLs and
+  Cloudflare cache policy where appropriate.
+
+## 1. What To Keep
+
+Keep these pieces for launch:
+
+| Item | Keep as | Reason |
 | --- | --- | --- |
-| OKE | Requires cluster lifecycle, node pools, Kubernetes upgrades, RBAC, pod scheduling, Helm, service exposure, and recovery procedures | Use OCI container runtime services or a small VM/container host for the three app services. |
-| Helm | Useful for repeatable Kubernetes deployment, but adds chart maintenance and values overlays | If leaving Kubernetes, replace Helm with container definitions and Terraform-managed service configuration. |
-| External Secrets Operator | Good pattern for Kubernetes, but requires ESO installation, workload identity, ClusterSecretStore, ExternalSecrets, and sync debugging | Use OCI Vault references or CI/CD-injected secrets directly in the application runtime if not using Kubernetes. |
-| Actions Runner Controller | Adds in-cluster deployment dependency, privileged runner concerns, and Docker-in-Docker capacity planning | Use GitHub-hosted runners for builds and deployments unless private OCI network access requires self-hosted runners. |
-| Multi-region Terraform roots | Riyadh and Jeddah are useful for future DR but increase planning, naming, and cost decisions now | Make one primary region the default. Treat second-region deployment as a documented DR phase. |
-| Separate dev/test/prod managed databases | Strong isolation but high cost and more operational surfaces | Keep production isolated. Use local Docker/k3d or one shared non-production managed PostgreSQL DB system if needed. |
-| Cantaloupe persistent cache | Cache storage can create scheduling and replica consistency questions | Start with ephemeral cache plus Cloudflare caching. Source images remain durable in Object Storage. |
-| Cloudflare manual configuration | Manual dashboard configuration can drift | Keep Cloudflare, but manage only critical records/rules as code at first. |
+| `apps/frontend` | Production app | Next.js remains the public website. Build immutable image from `apps/frontend/Dockerfile`. |
+| `apps/strapi` | Production app | Strapi remains the CMS. Build immutable image from `apps/strapi/Dockerfile`. |
+| Cantaloupe | Production app | Required for IIIF image delivery from Object Storage. Keep cache disposable. |
+| Docker Compose | Local and production runtime pattern | The production runtime should look like the existing local workflow, but with managed PostgreSQL/Object Storage and production images. |
+| OCI Database with PostgreSQL | Managed data service | Durable CMS database should not live on the VM. |
+| OCI Object Storage | Managed media service | Source images, Strapi uploads, video, and audio should not live on the VM. |
+| Cloudflare | Public edge | DNS, TLS, CDN, WAF, cache rules, and admin access controls. |
+| Self-hosted GitHub Actions runner | Separate OCI VM | Required by Saudi government constraints. Keep it outside the app VM. |
+| OCIR | Image registry | Store immutable frontend and Strapi images. |
+| Terraform network module | Modify and keep | Keep one VCN with app, runner, and data access controls. |
+| Terraform managed PostgreSQL module | Keep | Already aligned with target architecture. |
+| Terraform object-storage module | Extend and keep | Add/confirm buckets for IIIF, Strapi uploads, video, and audio. |
+| Terraform Vault/secrets module | Keep if used operationally | Useful for source-of-truth secrets, even if Compose receives secrets through env files generated during deployment. |
+| `tests/validation` | Keep and adapt | Smoke tests should validate the VM + Cloudflare paths after deployment. |
+| `infrastructure/cantaloupe/cantaloupe.properties` | Keep | Reuse as the production Cantaloupe baseline with OCI Object Storage settings. |
+| `infrastructure/minio` and local PostgreSQL init | Keep for local development | MinIO/PostgreSQL remain local substitutes for OCI services. |
 
-## Simplification Options
+## 2. What To Remove
 
-### Option 1: Keep Current OKE Architecture, Simplify Operations
-
-This is the lowest-risk change from the current repository because it preserves
-the existing Kubernetes and Helm direction.
-
-Recommended changes:
-
-- Use one active OCI region for production launch.
-- Use OKE Basic Cluster unless Enhanced Cluster features are required.
-- Keep one OKE node pool at launch.
-- Remove Actions Runner Controller from the first production deployment.
-- Use GitHub-hosted runners to build images and deploy with approved OCI
-  credentials.
-- Keep production PostgreSQL on OCI Database with PostgreSQL.
-- Use one shared non-production PostgreSQL DB system only if shared cloud
-  testing is required.
-- Keep Cantaloupe derivative cache ephemeral or small.
-- Defer default-deny NetworkPolicies until the service paths are final, but add
-  namespace quotas and resource limits before production.
-
-Pros:
-
-- Smallest deviation from current Terraform and Helm investment.
-- Keeps Kubernetes portability.
-- Preserves a clear path to scale later.
-
-Cons:
-
-- Still requires Kubernetes knowledge to operate.
-- Still requires Helm chart maintenance.
-- Still has OKE node cost and cluster upgrade responsibility.
-
-Best fit:
-
-- The team expects to retain Kubernetes expertise or wants OKE as the long-term
-  operating model.
-
-## Option 2: Container Services Without Kubernetes
-
-This option keeps managed data services and object storage, but removes OKE,
-Helm, ARC, Kubernetes RBAC, and External Secrets Operator.
-
-Target shape:
-
-- Next.js runs as a containerized service.
-- Strapi runs as a containerized service.
-- Cantaloupe runs as a containerized service.
-- OCI Database with PostgreSQL stores Strapi data.
-- OCI Object Storage stores Strapi uploads and the 100 GB IIIF source image
-  corpus.
-- Cloudflare routes `www`, `cms`, `api`, and `iiif` hostnames to the OCI origin.
-- Terraform manages networking, Object Storage, PostgreSQL, Vault, and
-  container service definitions.
-
-Pros:
-
-- Removes Kubernetes control plane, node pools, Helm charts, ESO, and ARC.
-- Easier for a small IT team to understand.
-- Fewer cluster-specific recovery procedures.
-- Better match for three long-running application services.
-
-Cons:
-
-- Less portable than Kubernetes.
-- Some OCI container runtime choices may have fewer knobs than OKE.
-- Migration requires replacing Helm deployment paths.
-- Need to confirm the selected OCI runtime supports the required networking,
-  secrets, persistent cache, and container image workflow.
-
-Best fit:
-
-- The team wants the simplest managed-container deployment and does not need
-  Kubernetes-specific features.
-
-## Option 3: Single Small VM Running Containers
-
-This is the simplest operational architecture, but it trades away managed
-runtime features.
-
-Target shape:
-
-- One OCI Compute VM runs Docker or Podman Compose for Next.js, Strapi, and
-  Cantaloupe.
-- OCI Database with PostgreSQL remains managed.
-- OCI Object Storage remains the source of truth for media and IIIF images.
-- Cloudflare fronts the VM.
-- Terraform provisions the VM, network, Object Storage, PostgreSQL, Vault, and
-  security rules.
-
-Pros:
-
-- Easiest to understand.
-- Very fast to deploy.
-- Minimal moving parts.
-- Local Docker Compose maps closely to production.
-
-Cons:
-
-- VM patching, process supervision, log rotation, and host recovery become the
-  team's responsibility.
-- Rolling deployments are harder.
-- High availability requires a second VM and load balancer.
-- A host failure affects all app services until the VM is restored or replaced.
-
-Best fit:
-
-- A temporary launch architecture, pilot deployment, or low-budget staging
-  environment.
-
-## Recommended Path
-
-Start with Option 1 if the team is already committed to OKE. Otherwise, choose
-Option 2 as the simpler production target.
-
-The recommended simplification sequence is:
-
-1. Freeze production to one OCI region.
-2. Keep OCI Database with PostgreSQL and OCI Object Storage as non-negotiable
-   managed data services.
-3. Remove Actions Runner Controller from the production launch scope.
-4. Use GitHub-hosted runners and a documented break-glass deployment path.
-5. Keep one production PostgreSQL DB system and avoid separate managed DB
-   systems for `dev` and `test` unless required.
-6. Keep Cantaloupe cache small and disposable; rely on Object Storage for source
-   durability and Cloudflare for public derivative caching.
-7. Defer multi-region deployment, OpenSearch, network firewall, private vault,
-   and HSM keys until there is a documented requirement.
-8. Add only the Terraform needed to recreate the chosen simpler runtime.
-
-## What To Remove Or Defer First
+Remove these from the launch path. Deletion can happen after the VM path is
+working in `dev` or `test`; until then, mark them deprecated to avoid losing a
+rollback reference.
 
 | Item | Recommendation | Reason |
 | --- | --- | --- |
-| Actions Runner Controller | Defer | It couples deployment to the cluster being deployed and adds privileged runner operations. |
-| Organization-scoped OCI runners | Defer | GitHub-hosted runners are easier unless private network access is mandatory. |
-| Active Jeddah deployment | Defer | Keep Jeddah as a DR design until restore procedures are tested in one region. |
-| Separate managed DB systems for dev/test | Defer | Cost and maintenance likely outweigh benefits at current scale. |
-| Persistent shared Cantaloupe cache | Defer | Source images are in Object Storage and derivatives can be regenerated. |
-| OKE Enhanced Cluster | Avoid initially | Use Basic Cluster unless a specific Enhanced feature is required. |
-| OpenSearch | Continue deferring | PostgreSQL/application search is enough until product requirements prove otherwise. |
-| OCI Network Firewall | Avoid initially | Cloudflare is already the edge WAF/CDN layer. |
-| Private Vault/HSM keys | Avoid initially | Default Vault and software-protected keys are simpler and likely sufficient. |
+| `infrastructure/helm/frontend` | Remove from active launch path | Helm is unnecessary without Kubernetes. |
+| `infrastructure/helm/strapi` | Remove from active launch path | Compose should run the immutable Strapi image and a one-off migration command. |
+| `infrastructure/helm/cantaloupe` | Remove from active launch path | Compose should run Cantaloupe directly. |
+| `infrastructure/helm/actions-runner-controller` | Remove | Runner will be a separate VM, not ARC in Kubernetes. |
+| `infrastructure/kubernetes/actions-runner-controller` | Remove | Replaced by VM runner provisioning and runner install docs. |
+| `infrastructure/kubernetes/external-secrets` | Remove | External Secrets Operator is Kubernetes-specific. |
+| `infrastructure/terraform/environments/oke` | Remove from launch path | OKE is not part of the August 1 architecture. |
+| `infrastructure/terraform/environments/oke-rbac` | Remove | Kubernetes RBAC is not needed for Compose. |
+| `infrastructure/terraform/modules/kubernetes` | Remove or archive | No cluster should be provisioned for launch. |
+| `infrastructure/terraform/modules/kubernetes-rbac` | Remove or archive | No Kubernetes namespaces or RBAC are needed. |
+| OKE-focused deployment docs | Rewrite | Current docs still describe OKE as production. They should point to VM + Compose. |
+| ARC-focused runner docs | Rewrite | The runner architecture is now a standalone OCI VM. |
 
-## Deployment Workflow Simplification
+Do not remove local Docker Compose, app Dockerfiles, object storage code paths,
+managed PostgreSQL Terraform, or Cloudflare documentation.
 
-Current intended workflow:
+## 3. What To Defer
+
+Defer these until after August 1 unless a launch-blocking requirement appears:
+
+| Item | Defer until | Reason |
+| --- | --- | --- |
+| OKE/Kubernetes | Traffic, staffing, or compliance requirements justify it | Current scale does not need cluster operations. |
+| Helm | Kubernetes is reintroduced | Compose is enough for four containers. |
+| Actions Runner Controller | Kubernetes is reintroduced and VM runners are insufficient | ARC adds privileged Kubernetes runner operations. |
+| Multi-region active deployment | Restore procedures are proven in one region | Active-active or warm standby adds operational load. |
+| Multiple app VMs behind a load balancer | Availability target requires VM failure tolerance | Launch can start with one app VM plus a tested rebuild/restore procedure. |
+| Persistent shared Cantaloupe cache | Cache miss rates or tile latency prove a need | Derivatives can be regenerated and Cloudflare should absorb public repeat traffic. |
+| OpenSearch | Search requirements exceed PostgreSQL/application search | Current content scale is small. |
+| Service mesh | Never for launch | Adds no launch value. |
+| OCI Network Firewall in addition to Cloudflare | Specific security requirement | Cloudflare is already the public WAF/CDN edge. |
+| Private Vault or HSM keys | Compliance requires them | Default Vault and software-protected keys are simpler. |
+| Separate managed dev/test databases | Budget and workflow require shared cloud non-prod | Local Compose should remain default for daily development. |
+
+## 4. Proposed New Directory Structure
+
+Target structure:
 
 ```text
-GitHub Actions
-  -> OCI self-hosted runner in OKE
-  -> OCIR image build/push
-  -> Helm upgrade
-  -> OKE workloads
+apps/
+  frontend/
+  strapi/
+
+deploy/
+  compose/
+    production.compose.yml
+    production.env.example
+    caddy/
+      Caddyfile
+    nginx/
+      nginx.conf
+    systemd/
+      almadar-compose.service
+    scripts/
+      deploy.sh
+      backup-compose-config.sh
+      restore-compose-config.sh
+      run-strapi-migrations.sh
+  runner/
+    install-runner.sh
+    runner.env.example
+    systemd/
+      github-runner.service
+
+infrastructure/
+  cantaloupe/
+    cantaloupe.properties
+  minio/
+    init-buckets.sh
+  postgresql/
+    init.sql
+  terraform/
+    modules/
+      compute-vm/
+      managed-postgresql/
+      network/
+      object-storage/
+      vault-secrets/
+    environments/
+      prod/
+        main.tf
+        variables.tf
+        outputs.tf
+        terraform.tfvars.example
+      nonprod/
+        main.tf
+        variables.tf
+        outputs.tf
+        terraform.tfvars.example
+
+docs/
+  cloudflare.md
+  platform-overview.md
+  production-deployment-plan.md
+  runbooks/
+    disaster-recovery.md
+    vm-patching.md
+    database-restore.md
+    object-storage-restore.md
+  adr/
+    007-simplified-august-2026-launch.md
+
+tests/
+  validation/
 ```
 
-Simpler workflow:
+Notes:
 
-```text
-GitHub-hosted runner
-  -> build immutable container images
-  -> push to OCIR
-  -> deploy to selected OCI runtime
-  -> run smoke tests through Cloudflare/origin endpoints
-```
+- `deploy/compose/production.compose.yml` should be production-only and should
+  not include local PostgreSQL or MinIO.
+- Root `docker-compose.yml` should remain local development only.
+- `deploy/compose/production.env.example` documents required variables but
+  must not contain secrets.
+- `deploy/compose/scripts/deploy.sh` should pull pinned image tags, run Strapi
+  migrations, restart services, and run health checks.
+- `deploy/runner` should document a single-purpose self-hosted runner VM,
+  preferably with one runner group and labels such as `oci`, `prod-deploy`, and
+  `self-hosted`.
 
-This removes the need for ARC during initial launch. If private network access
-is needed later, add self-hosted runners after the production app path is stable.
+## 5. Migration Plan
 
-## Terraform Simplification
+### Phase 0: Freeze The Launch Decision
 
-Keep Terraform, but reduce the number of independent stacks needed for launch.
+Deliverables:
 
-Recommended launch stacks:
+- Update ADR-007 to state VM + Docker Compose is the accepted August 1 launch
+  architecture.
+- Update `docs/platform-overview.md` so production no longer describes OKE as
+  the default runtime.
+- Update `docs/production-deployment-plan.md` around Compose deployment rather
+  than Helm deployment.
+- Mark OKE/Helm/ARC docs as deferred or archive them under a clear
+  `docs/archive/` path.
 
-- `network`: one primary-region VCN, public load balancer subnet, private data
-  subnet, private app subnet if needed.
-- `object-storage`: `iiif-prod` and `strapi-prod` first; add non-production
-  buckets only when shared cloud environments need them.
-- `postgresql`: one production OCI Database with PostgreSQL DB system.
-- `vault`: production application secrets.
-- `runtime`: the chosen application runtime, either OKE or simpler container
-  services.
+Exit criteria:
 
-Defer or make optional:
+- A new engineer can identify the launch architecture from the README and docs
+  without encountering conflicting OKE instructions.
 
-- second-region network,
-- second-region Object Storage,
-- non-production managed PostgreSQL systems,
-- Actions Runner Controller resources,
-- advanced Kubernetes RBAC and policy stacks until OKE is confirmed as the
-  runtime.
+### Phase 1: Add Production Compose Runtime
 
-## Operational Impact
+Deliverables:
 
-Simplification should reduce:
+- Create `deploy/compose/production.compose.yml` with services:
+  - `proxy` using Caddy or nginx,
+  - `frontend` from OCIR immutable image,
+  - `strapi` from OCIR immutable image,
+  - `cantaloupe` from a pinned Cantaloupe image.
+- Use managed services only:
+  - no PostgreSQL container,
+  - no MinIO container,
+  - no source media bind mounts.
+- Add named volumes only for:
+  - proxy state/config if needed,
+  - Docker/container logs if not using the host logging driver,
+  - Cantaloupe derivative cache.
+- Add health checks for all services.
+- Add `deploy/compose/production.env.example`.
+- Add systemd unit to start Compose on boot.
 
-- number of components to upgrade,
-- number of credentials and service accounts,
-- number of deployment failure modes,
-- amount of Kubernetes-specific knowledge required,
-- disaster recovery steps,
-- baseline monthly cost for idle non-production systems.
+Exit criteria:
 
-Simplification should not reduce:
+- A clean OCI-like VM can run all four production containers with managed
+  PostgreSQL and Object Storage settings.
 
-- durability of PostgreSQL data,
-- durability of IIIF and Strapi media,
-- ability to recreate infrastructure from source control,
-- Cloudflare edge protection,
-- documented backup and recovery procedures.
+### Phase 2: Add OCI VM Terraform
 
-## Decision Matrix
+Deliverables:
 
-| Criterion | Keep OKE, simplify | OCI container runtime | Single VM with containers |
-| --- | --- | --- | --- |
-| Lowest migration effort | High | Medium | Medium |
-| Lowest operational complexity | Medium | High | High initially |
-| Highest availability path | High | Medium | Low unless expanded |
-| Lowest Kubernetes expertise required | Low | High | High |
-| Best long-term scale path | High | Medium | Low |
-| Best fit for current scale | Medium | High | Medium |
+- Add `infrastructure/terraform/modules/compute-vm`.
+- Provision one application VM with:
+  - Docker Engine or Podman,
+  - Compose plugin,
+  - restricted ingress from Cloudflare where practical,
+  - SSH ingress restricted to approved admin/runner sources,
+  - block volume sized for Docker data, logs, and Cantaloupe cache only.
+- Provision one runner VM with:
+  - GitHub runner prerequisites,
+  - Docker build tooling if image builds happen there,
+  - no public app ports,
+  - SSH restricted to approved admins.
+- Keep OCI Database with PostgreSQL private.
+- Keep Object Storage access through service gateway where practical.
 
-## Final Recommendation
+Initial sizing:
 
-For a small cultural heritage platform with approximately 1,000 objects and
-100 GB of IIIF source images, the architecture can be simplified most by
-removing Kubernetes-adjacent deployment machinery before production launch.
+- Application VM: start with 4 OCPUs and 24-32 GB RAM if budget allows; reduce
+  only after Cantaloupe tile generation and Strapi build/runtime memory are
+  measured.
+- Runner VM: start with 2 OCPUs and 8-16 GB RAM; increase if Docker builds are
+  slow or memory-bound.
+- App VM block volume: enough for Docker images, logs, and derivative cache;
+  do not size it for the 155 GB durable media corpus because media belongs in
+  Object Storage.
 
-Keep the durable managed services: OCI Database with PostgreSQL, OCI Object
-Storage, OCI Vault, and Cloudflare. Reevaluate whether OKE is necessary for only
-three application services. If OKE remains, launch it in the smallest useful
-form and defer ARC, multi-region deployment, separate non-production managed
-databases, and persistent shared Cantaloupe caching.
+Exit criteria:
+
+- Terraform can recreate the network, app VM, runner VM, managed PostgreSQL,
+  Object Storage buckets, and required secret references.
+
+### Phase 3: Rework CI/CD For Self-Hosted Runner
+
+Deliverables:
+
+- Change `.github/workflows/frontend.yml` and `.github/workflows/strapi.yml`
+  from `ubuntu-latest` to the OCI self-hosted runner labels required by policy.
+- Keep immutable image builds and pushes to OCIR.
+- Add a deployment workflow that:
+  - runs only from protected branches/environments,
+  - uses the self-hosted runner,
+  - SSHes to the app VM,
+  - writes or selects the approved image tags,
+  - runs `docker compose pull`,
+  - runs Strapi migrations,
+  - restarts changed services,
+  - runs smoke tests.
+- Keep deployment credentials out of Git. Use GitHub environment secrets,
+  runner-local credentials, or OCI Vault-backed injection with documented
+  rotation.
+
+Exit criteria:
+
+- A `main` deployment can rebuild images, deploy the app VM, and run validation
+  without GitHub-hosted runners.
+
+### Phase 4: Move Data Paths To Managed Services
+
+Deliverables:
+
+- Confirm Strapi upload provider writes to OCI Object Storage.
+- Confirm IIIF source images live in the production IIIF bucket.
+- Add buckets or prefixes for video and audio.
+- Confirm Cantaloupe reads from Object Storage and does not require local image
+  files.
+- Configure Cloudflare cache rules for IIIF derivatives and public media.
+- Confirm signed/private media behavior where required by editorial policy.
+
+Exit criteria:
+
+- The application VM can be destroyed and recreated without losing PostgreSQL
+  data, uploads, source images, video, or audio.
+
+### Phase 5: Production Cutover
+
+Deliverables:
+
+- Deploy Compose stack to the production app VM.
+- Point Cloudflare staging hostnames to the app VM.
+- Run `tests/validation` against staging hostnames.
+- Load representative image, video, and audio content.
+- Verify:
+  - frontend page load,
+  - Strapi admin login through Cloudflare Access,
+  - Strapi API health,
+  - Cantaloupe `info.json` and tile responses,
+  - media delivery through Cloudflare,
+  - database connectivity,
+  - app VM reboot recovery,
+  - runner VM deployment path.
+- Switch production DNS in Cloudflare.
+
+Exit criteria:
+
+- Production hostnames serve through Cloudflare and the recovery path has been
+  tested at least once before launch.
+
+### Phase 6: Clean Up Kubernetes Artifacts
+
+Deliverables:
+
+- Remove or archive OKE Terraform environments and modules.
+- Remove Helm charts from active deployment docs.
+- Remove External Secrets Operator manifests.
+- Remove Actions Runner Controller manifests.
+- Update README, platform overview, deployment plan, Cloudflare docs, and
+  disaster recovery runbook.
+
+Exit criteria:
+
+- The repository source of truth matches the production architecture.
+
+## Production Compose Service Requirements
+
+The production Compose file should follow these rules:
+
+- Use pinned image tags, never mutable `latest` for app deployment.
+- Run `NODE_ENV=production` for frontend and Strapi.
+- Do not run `npm ci` or build code at container startup.
+- Store Strapi uploads in OCI Object Storage.
+- Store IIIF source images in OCI Object Storage.
+- Store video and audio in OCI Object Storage.
+- Keep local Cantaloupe cache disposable.
+- Put all public traffic through the proxy container.
+- Bind application containers only to the internal Compose network.
+- Emit logs to Docker logging or mounted log directories with rotation.
+- Use restart policies and health checks.
+- Document every environment variable in `production.env.example`.
+
+## Reliability Model
+
+This launch architecture is intentionally simple but must be recoverable.
+
+Reliability comes from:
+
+- managed PostgreSQL backups,
+- durable Object Storage media,
+- immutable container images in OCIR,
+- Terraform-recreated VMs and network,
+- systemd restarting Docker Compose on boot,
+- Cloudflare caching and protection,
+- tested restore steps.
+
+Known tradeoff:
+
+- One app VM is not highly available. A VM failure causes downtime until the VM
+  is repaired or recreated. This is acceptable only if the rebuild process is
+  tested and the launch reliability requirement allows a short recovery window.
+
+If the required recovery time is lower than a VM rebuild window, add a second
+app VM and an OCI Load Balancer after the single-VM path is working. Do not
+start with that complexity unless the requirement is explicit.
+
+## Definition Of Done For This Simplification
+
+- ADR-007 and all launch docs point to VM + Docker Compose.
+- Terraform provisions the app VM, runner VM, PostgreSQL, Object Storage,
+  network, and required secrets.
+- Production Compose does not include PostgreSQL or MinIO.
+- CI/CD runs on the self-hosted OCI runner.
+- Deployments use immutable images from OCIR.
+- Cloudflare routes and protects frontend, CMS, and IIIF endpoints.
+- The app VM can be rebuilt without data loss.
+- Validation tests pass through Cloudflare-backed hostnames.
+- Disaster recovery docs cover database restore, Object Storage recovery,
+  app VM rebuild, runner VM rebuild, and Compose redeploy.

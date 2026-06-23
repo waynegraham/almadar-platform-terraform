@@ -21,13 +21,14 @@ module "oke" {
   worker_subnet_id           = var.worker_subnet_id
   nsg_ids                    = var.nsg_ids
   kubernetes_version         = var.kubernetes_version
+  cluster_type               = var.cluster_type
   is_public_endpoint_enabled = var.is_public_endpoint_enabled
 
   create_node_pool    = true
   node_pool_size      = 3
   node_shape          = "VM.Standard.E4.Flex"
   node_ocpus          = 2
-  node_memory_gbs     = 8
+  node_memory_gbs     = 16
   node_image_id       = var.node_image_id
   availability_domain = var.availability_domain
   ssh_public_key      = var.ssh_public_key
