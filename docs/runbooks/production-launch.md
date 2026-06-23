@@ -233,6 +233,16 @@ node --version
 ssh <app-vm-user>@<app-vm-host> 'docker version'
 ```
 
+Run the runner preflight from a repository checkout on the runner VM:
+
+```bash
+APP_VM_HOST=<app-vm-host> APP_VM_USER=<app-vm-user> \
+  CONTAINER_REGISTRY=<registry> \
+  REGISTRY_USERNAME=<username> \
+  REGISTRY_PASSWORD=<token> \
+  deploy/preflight-runner.sh
+```
+
 ## 5. Object Storage Bucket Setup
 
 Terraform creates three production buckets:
@@ -416,6 +426,13 @@ docker image prune -f
 docker compose --env-file .env.prod -f compose.prod.yml ps
 ```
 
+Run app VM preflight before cutover and after any host rebuild:
+
+```bash
+cd /opt/almadar/deploy
+./preflight-app-vm.sh
+```
+
 Smoke checks:
 
 ```bash
@@ -424,6 +441,18 @@ curl -I https://<public-host>/cms/admin
 curl -I https://<public-host>/iiif/2/<known-identifier>/info.json
 docker compose --env-file .env.prod -f compose.prod.yml ps
 ```
+
+Run public edge preflight from a machine outside OCI after Cloudflare is
+configured:
+
+```bash
+ENV_FILE=/path/to/.env.prod APP_VM_PUBLIC_IP=<app-vm-public-ip> \
+  KNOWN_IIIF_IDENTIFIER=<object-key> \
+  ./deploy/preflight-public.sh
+```
+
+`KNOWN_IIIF_IDENTIFIER` should be an object key known to exist in the production
+IIIF source bucket.
 
 ## 9. Backup And Restore
 

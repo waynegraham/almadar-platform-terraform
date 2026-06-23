@@ -21,6 +21,9 @@ deploy/
   .env.prod.example
   deploy.sh
   backup.sh
+  preflight-app-vm.sh
+  preflight-public.sh
+  preflight-runner.sh
   README.md
 ```
 
@@ -50,6 +53,40 @@ and generated derivatives.
 
 The script pulls immutable image tags, starts the stack, waits for health
 checks, and prints service status.
+
+## Preflight Checks
+
+Run the app VM preflight on the application VM after `.env.prod` exists and
+before production cutover:
+
+```bash
+cd /opt/almadar/deploy
+./preflight-app-vm.sh
+```
+
+Run the public edge preflight from a workstation outside OCI after Cloudflare
+DNS is configured:
+
+```bash
+ENV_FILE=/path/to/.env.prod APP_VM_PUBLIC_IP=<app-vm-public-ip> \
+  KNOWN_IIIF_IDENTIFIER=<object-key> \
+  ./preflight-public.sh
+```
+
+Run the runner preflight on the self-hosted GitHub Actions runner VM:
+
+```bash
+cd <repository-checkout>
+APP_VM_HOST=<app-vm-host> APP_VM_USER=opc \
+  CONTAINER_REGISTRY=<registry> \
+  REGISTRY_USERNAME=<username> \
+  REGISTRY_PASSWORD=<token> \
+  deploy/preflight-runner.sh
+```
+
+The scripts fail on clear launch blockers and warn on items that require an
+operator decision, such as PostgreSQL TLS verification exceptions or missing
+direct-origin checks.
 
 ## Routes
 
