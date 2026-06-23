@@ -128,5 +128,32 @@ docker compose --env-file .env.prod -f compose.prod.yml restart frontend
 docker compose --env-file .env.prod -f compose.prod.yml pull
 ```
 
+## IIIF Cache Warming
+
+Use `warm-iiif-cache.sh` to verify source identifiers and warm Cantaloupe or
+Cloudflare derivatives with bounded concurrency. The identifier file is plain
+text, one source object key per line. Blank lines and lines beginning with `#`
+are ignored.
+
+```bash
+./warm-iiif-cache.sh --identifiers iiif-identifiers.txt --concurrency 3
+```
+
+By default the script requests `info.json` and a 256px derivative for each
+identifier. Set `IIIF_BASE_URL` or pass `--base-url` when warming a specific
+origin or hostname:
+
+```bash
+IIIF_BASE_URL=https://iiif.example.org/iiif \
+  ./warm-iiif-cache.sh --identifiers iiif-identifiers.txt --concurrency 2 --pause 0.25
+```
+
+For a verification-only run that avoids derivative generation:
+
+```bash
+./warm-iiif-cache.sh --identifiers iiif-identifiers.txt \
+  --replace-paths --path /info.json
+```
+
 Do not add PostgreSQL, MinIO, OKE, Helm, Actions Runner Controller, or External
 Secrets Operator to this production Compose stack.
